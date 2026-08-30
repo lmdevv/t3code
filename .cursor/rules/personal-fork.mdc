@@ -1,0 +1,17 @@
+---
+description: lmdevv personal T3 fork delivery. Read before any fork, release, or NUR work.
+alwaysApply: true
+---
+
+# Personal fork
+
+This checkout is the `lmdevv/t3code` fork, not upstream `pingdotgg/t3code`. Upstream `AGENTS.md` still applies except where `docs/personal/AGENTS.md` overrides it.
+
+At the start of the session, read:
+
+1. `/home/zxcv/.cursor/skills/machine-context/SKILL.md`
+2. `docs/personal/AGENTS.md`
+
+Do not push to `origin` (`pingdotgg/t3code`). Push personal commits to `personal` (`lmdevv/t3code`) `main`.
+
+Work is not finished until every test has passed, the unsigned desktop build exists, that binary has been launched on `dawin` over Tailscale without a hang, and NUR hashes on `lmdevv/nur-packages` `main` match the new release. See `docs/personal/AGENTS.md` for the exact pipeline.
