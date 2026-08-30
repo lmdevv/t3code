@@ -2,6 +2,7 @@ import {
   type ProviderDriverKind,
   type ProviderInstanceId,
   type ProviderOptionSelection,
+  type ResolvedKeybindingsConfig,
   type ScopedThreadRef,
   type ServerProviderModel,
 } from "@t3tools/contracts";
@@ -59,6 +60,7 @@ type TraitsRenderInput = {
   isComposerOwned?: boolean;
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
+  keybindings?: ResolvedKeybindingsConfig;
 };
 
 export function getComposerPromptInjectionState(prompt: string): ComposerPromptInjectionState {
@@ -140,6 +142,7 @@ function renderTraitsControl(
     isComposerOwned,
     open,
     onOpenChange,
+    keybindings,
   } = input;
   const hasTarget = threadRef !== undefined || draftId !== undefined;
   if (
@@ -174,6 +177,7 @@ function renderTraitsControl(
       {...(isComposerOwned ? { isComposerOwned } : {})}
       {...(open !== undefined ? { open } : {})}
       {...(onOpenChange ? { onOpenChange } : {})}
+      {...(keybindings ? { keybindings } : {})}
     />
   );
 }
