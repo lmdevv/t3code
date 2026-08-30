@@ -22,7 +22,7 @@ export const DEFAULT_KEYBINDINGS: ReadonlyArray<KeybindingRule> = [
   { key: "mod+b", command: "sidebar.toggle" },
   { key: "mod+j", command: "terminal.toggle" },
   { key: "mod+alt+b", command: "rightPanel.toggle" },
-  { key: "mod+shift+j", command: "rightPanel.openTerminal", when: "!terminalFocus" },
+  { key: "mod+shift+j", command: "rightPanel.openTerminal" },
   { key: "mod+shift+f", command: "rightPanel.openFiles", when: "!terminalFocus" },
   { key: "mod+alt+r", command: "rightPanel.openPullRequest", when: "!terminalFocus" },
   { key: "mod+shift+a", command: "rightPanel.openAgents", when: "!terminalFocus" },
