@@ -21,7 +21,7 @@ export const environmentThreadDetails = createEnvironmentThreadDetailAtoms(
   environmentThreads.stateAtom,
 );
 export const environmentThreadShells = createEnvironmentThreadShellAtoms({
-  catalogValueAtom: environmentCatalog.catalogValueAtom,
+  catalogValueAtom: Atom.make((get) => get(environmentCatalog.catalogValueAtom)),
   snapshotAtom: environmentSnapshotAtom,
 });
 
