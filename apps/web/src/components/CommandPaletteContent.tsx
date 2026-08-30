@@ -1,5 +1,9 @@
+import { useAtomValue } from "@effect/atom-react";
 import { ArrowDownIcon, ArrowUpIcon } from "lucide-react";
 import type { ComponentProps, ReactNode } from "react";
+
+import { usePickerNavigationKeybindings } from "~/pickerNavigation";
+import { primaryServerKeybindingsAtom } from "~/state/server";
 
 import { Command, CommandFooter, CommandInput, CommandPanel } from "./ui/command";
 import { Kbd, KbdGroup } from "./ui/kbd";
@@ -33,6 +37,9 @@ export function CommandPaletteContent({
   testId,
   ...commandProps
 }: CommandPaletteContentProps) {
+  const keybindings = useAtomValue(primaryServerKeybindingsAtom);
+  usePickerNavigationKeybindings(keybindings);
+
   return (
     <div className="contents" data-testid={testId}>
       <Command {...commandProps}>
