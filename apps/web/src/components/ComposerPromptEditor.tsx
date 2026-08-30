@@ -9,6 +9,7 @@ import { OnChangePlugin } from "@lexical/react/LexicalOnChangePlugin";
 import { PlainTextPlugin } from "@lexical/react/LexicalPlainTextPlugin";
 import {
   type ComposerContextClipboardFragment,
+  type ResolvedKeybindingsConfig,
   type ServerProviderSkill,
 } from "@t3tools/contracts";
 import {
@@ -112,6 +113,8 @@ import {
   type ComposerCitationCommentRequest,
   type ComposerCitationCommentTarget,
 } from "./ComposerCitationNode";
+import { resolveShortcutCommand } from "~/keybindings";
+import { pickerNavigationDirectionFromCommand } from "~/pickerNavigation";
 
 const COMPOSER_EDITOR_HMR_KEY = `composer-editor-${Math.random().toString(36).slice(2)}`;
 const SURROUND_SYMBOLS: [string, string][] = [
@@ -871,6 +874,7 @@ interface ComposerPromptEditorProps {
   disabled: boolean;
   placeholder: string;
   containerClassName?: string;
+  keybindings?: ResolvedKeybindingsConfig;
   className?: string;
   placeholderClassName?: string;
   onChange: (
@@ -954,6 +958,7 @@ function caretLineRect(range: Range, edge: "start" | "end"): DOMRect | null {
 }
 
 function ComposerCommandKeyPlugin(props: {
+  keybindings: ResolvedKeybindingsConfig;
   onCommandKeyDown?: (
     key: "ArrowDown" | "ArrowUp" | "Enter" | "Tab",
     event: KeyboardEvent,
@@ -1003,12 +1008,26 @@ function ComposerCommandKeyPlugin(props: {
       (event) => handleCommand("Tab", event),
       COMMAND_PRIORITY_HIGH,
     );
+    const unregisterPickerNavigation = editor.registerCommand(
+      KEY_DOWN_COMMAND,
+      (event) => {
+        const direction = pickerNavigationDirectionFromCommand(
+          resolveShortcutCommand(event, props.keybindings, {
+            context: { pickerOpen: true },
+          }),
+        );
+        if (!direction) return false;
+        return handleCommand(direction === "next" ? "ArrowDown" : "ArrowUp", event);
+      },
+      COMMAND_PRIORITY_HIGH,
+    );
 
     return () => {
       unregisterArrowDown();
       unregisterArrowUp();
       unregisterEnter();
       unregisterTab();
+      unregisterPickerNavigation();
     };
   }, [editor, props]);
 
@@ -1626,6 +1645,7 @@ function ComposerPromptEditorInner({
   disabled,
   placeholder,
   containerClassName,
+  keybindings = [],
   className,
   placeholderClassName,
   onChange,
@@ -2039,7 +2059,10 @@ function ComposerPromptEditorInner({
             ErrorBoundary={LexicalErrorBoundary}
           />
           <OnChangePlugin onChange={handleEditorChange} />
-          <ComposerCommandKeyPlugin {...(onCommandKeyDown ? { onCommandKeyDown } : {})} />
+          <ComposerCommandKeyPlugin
+            keybindings={keybindings}
+            {...(onCommandKeyDown ? { onCommandKeyDown } : {})}
+          />
           <ComposerSurroundSelectionPlugin skills={skills} />
           <ComposerHomeEndKeyPlugin />
           <ComposerInlineTokenArrowPlugin />
@@ -2067,6 +2090,7 @@ export function ComposerPromptEditor({
   disabled,
   placeholder,
   containerClassName,
+  keybindings = [],
   className,
   placeholderClassName,
   onChange,
@@ -2105,6 +2129,7 @@ export function ComposerPromptEditor({
     <ComposerSkillsContext value={skills}>
       <LexicalComposer key={COMPOSER_EDITOR_HMR_KEY} initialConfig={initialConfig}>
         <ComposerPromptEditorInner
+          keybindings={keybindings}
           value={value}
           cursor={cursor}
           contextRecords={contextRecords}
