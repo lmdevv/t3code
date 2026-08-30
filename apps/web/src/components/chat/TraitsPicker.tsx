@@ -3,9 +3,11 @@ import {
   type ProviderInstanceId,
   type ProviderOptionDescriptor,
   type ProviderOptionSelection,
+  type ResolvedKeybindingsConfig,
   type ScopedThreadRef,
   type ServerProviderModel,
 } from "@t3tools/contracts";
+import { DEFAULT_RESOLVED_KEYBINDINGS } from "@t3tools/shared/keybindings";
 import {
   applyClaudePromptEffortPrefix,
   buildProviderOptionSelectionsFromDescriptors,
@@ -34,7 +36,6 @@ import { cn } from "~/lib/utils";
 import { Badge } from "../ui/badge";
 import { ComposerControl, ComposerControlChevron, ComposerControlIcon } from "./ComposerControl";
 import { usePickerNavigationKeybindings } from "../../pickerNavigation";
-import { primaryServerKeybindingsAtom } from "../../state/server";
 
 type ProviderOptions = ReadonlyArray<ProviderOptionSelection>;
 
@@ -278,6 +279,7 @@ export interface TraitsMenuContentProps {
   triggerClassName?: string;
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
+  keybindings?: ResolvedKeybindingsConfig;
 }
 
 export const TraitsMenuContent = memo(function TraitsMenuContentImpl({
@@ -548,11 +550,11 @@ export const TraitsPicker = memo(function TraitsPicker({
   triggerClassName,
   open,
   onOpenChange,
+  keybindings = DEFAULT_RESOLVED_KEYBINDINGS,
   ...persistence
 }: TraitsMenuContentProps & TraitsPersistence) {
   const [uncontrolledIsMenuOpen, setUncontrolledIsMenuOpen] = useState(false);
   const isMenuOpen = open ?? uncontrolledIsMenuOpen;
-  const keybindings = useAtomValue(primaryServerKeybindingsAtom);
   usePickerNavigationKeybindings(keybindings, { enabled: isMenuOpen });
   const setIsMenuOpen = (nextOpen: boolean) => {
     onOpenChange?.(nextOpen);
@@ -656,4 +658,3 @@ export const TraitsPicker = memo(function TraitsPicker({
     </Menu>
   );
 });
-import { useAtomValue } from "@effect/atom-react";

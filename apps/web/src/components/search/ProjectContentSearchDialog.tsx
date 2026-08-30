@@ -1,3 +1,4 @@
+import { useAtomValue } from "@effect/atom-react";
 import type { ProjectContentMatch } from "@t3tools/contracts";
 import { LoaderCircle } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
@@ -7,6 +8,7 @@ import { useTheme } from "~/hooks/useTheme";
 import { cn } from "~/lib/utils";
 import { useRightPanelStore } from "~/rightPanelStore";
 import { useProjectContentSearch } from "~/state/queries";
+import { primaryServerKeybindingsAtom } from "~/state/server";
 
 import { PierreEntryIcon } from "../chat/PierreEntryIcon";
 import { CommandPaletteContent } from "../CommandPaletteContent";
@@ -103,6 +105,7 @@ function OpenContentSearchDialog(props: {
 }) {
   const { target } = props;
   const { resolvedTheme } = useTheme();
+  const keybindings = useAtomValue(primaryServerKeybindingsAtom);
   const [query, setQuery] = useState("");
   const [caseSensitive, setCaseSensitive] = useState(false);
   const [wholeWord, setWholeWord] = useState(false);
@@ -162,6 +165,7 @@ function OpenContentSearchDialog(props: {
   return (
     <CommandPaletteContent
       aria-label={`Search file contents in ${target.projectName}`}
+      keybindings={keybindings}
       escapeLabel="Back"
       footerActionLabel="Open file"
       inputAccessory={
