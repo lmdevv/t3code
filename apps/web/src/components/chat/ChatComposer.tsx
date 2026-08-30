@@ -6423,6 +6423,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                 <ComposerCommandMenuLayer anchor={composerMenuAnchor}>
                   <ComposerStashMenu
                     entries={stashQueue}
+                    keybindings={keybindings}
                     stashShortcutLabel={shortcutLabelForCommand(keybindings, "composer.stash", {
                       context: {
                         terminalFocus: false,
