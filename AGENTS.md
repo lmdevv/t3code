@@ -154,3 +154,33 @@ Full glossary with file links: `docs/internals/glossary.md`
 
 - Don't verify with browsers or computer use unless the user explicitly agrees or requests it.
 - Security is important, but should not be over-indexed on, especially for dev mode/maintainer-only features.
+
+## lmdevv personal fork (overrides above)
+
+This checkout is `lmdevv/t3code`, not upstream `pingdotgg/t3code`. Everything above still applies except where this section fights it. When it fights, this section wins.
+
+Read immediately, before writing code or saying work is done:
+
+1. `/home/zxcv/.cursor/skills/machine-context/SKILL.md`
+2. `/home/zxcv/.cursor/skills/personal-t3-fork/SKILL.md` (also in this repo at `.cursor/skills/personal-t3-fork/SKILL.md`)
+
+Follow that skill as a loop. Copy its checklist. Do not tell the user the work is finished until every box is checked.
+
+Overrides:
+
+- Push only to `personal` (`lmdevv/t3code`) `main`. Never push to `origin` (`pingdotgg/t3code`).
+- Run the full test suite (`vp test`) plus typecheck for every package you touched. The "CI owns the full suite / do not run repo-wide checks" default above does not apply on this fork.
+- After tests, dispatch `personal-release.yml` so unsigned Linux x64, macOS arm64, and macOS x64 artifacts exist for this commit.
+- Launch that arm64 binary on `dawin` over Tailscale. Isolated `HOME`. The window must get past loading into real UI. Fail on `catalogValueAtom` or a stuck spinner. `test-t3-app` is not this check.
+- Then dispatch `update-t3code.yml` on `lmdevv/nur-packages`. Wait until `pkgs/t3code/default.nix` on `main` has the new version and hashes, validated on Linux and both Darwin architectures.
+- Only then say the user can update NUR on `dawin` and `darwin-rebuild switch`.
+
+Machines: `nixos` for compile, tests, git, Actions. `dawin` for the `.app`. SSH `zxcv@dawin`. Prefer `nixos` for heavy work. Kill only PIDs you spawned. Never `pkill -f`. Never open live `~/.t3` read-write.
+
+If a box in the skill fails, stop and name it. Do not imply Darwin is ready.
+
+### Overview
+
+The T3 Code fork at `lmdevv/t3code` tracks upstream `main` with personal commits on top. Those commits add editable `Ctrl+P/N` picker navigation across command/file search, model and reasoning pickers, composer suggestions, and right-panel launchers. They also add `modelOptionsPicker.toggle`, direct right-panel commands for terminal, files, pull requests, and agents, move browser preview to `Cmd+Shift+B`, resolve conflicting defaults, delay catalog atom reads until first use, and keep picker shortcuts out of the composer bundle so the packaged desktop renderer can boot. The daily personal-release workflow rebases onto upstream at 04:17 UTC, verifies the patches, and publishes unsigned Linux x64, macOS arm64, and macOS x64 builds. Releases are tagged `v0.0.37-lmdevv.YYYYMMDD.N`.
+
+The NUR repository at `/home/zxcv/Documents/github/nur-packages` packages those artifacts through its flake. Its 09:17 UTC updater discovers the latest personal release, refreshes hashes, builds natively on Linux and both Darwin architectures, then commits and notifies NUR only after validation passes. `linear-cli` was removed in `9532b1a`. `lmdevv` is on the central NUR registry `main`. Use `main`, not `master`. The public search page can lag. Darwin should install `nur.repos.lmdevv.t3code` and rebuild only after the skill loop has passed for that version.
