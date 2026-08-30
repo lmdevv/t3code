@@ -44,7 +44,7 @@ Repeating either shortcut closes that search, and switching shortcuts replaces t
 Picker lists support `picker.previous` and `picker.next`, which default to `ctrl+p` and `ctrl+n`.
 These commands are active only while a supported picker is open. They cover the command palette,
 file and project search, model and model-options pickers, composer file/skill/slash suggestions,
-and the right-panel launcher.
+the prompt stash drawer, and the right-panel launcher.
 
 `modelPicker.toggle` opens the model picker and defaults to `mod+shift+m`.
 `modelOptionsPicker.toggle` opens the current model's reasoning and other provider options and
@@ -53,8 +53,11 @@ defaults to `mod+shift+,`.
 The right-panel commands open or activate their surfaces instead of creating duplicate tabs:
 `rightPanel.openTerminal` defaults to `mod+shift+j`, `rightPanel.openFiles` to `mod+shift+f`,
 `rightPanel.openPullRequest` to `mod+alt+r`, and `rightPanel.openAgents` to `mod+shift+a`.
-The existing browser preview command, `preview.toggle`, defaults to `mod+shift+b`. The terminal
-drawer remains `terminal.toggle` on `mod+j`, and the diff remains `diff.toggle` on `mod+d`.
+`rightPanel.openTerminal` also hides the panel when the terminal tab is already active, including
+while the terminal has focus, without deleting the session. Use `terminal.close` (`mod+w` while
+the terminal is focused) to close that session. The existing browser preview command,
+`preview.toggle`, defaults to `mod+shift+b`. The terminal drawer remains `terminal.toggle` on
+`mod+j`, and the diff remains `diff.toggle` on `mod+d`.
 `themeEditor.toggle` opens or closes the floating theme editor and defaults to
 `mod+alt+shift+t`. Select a color label to spotlight the elements that use it; select the label
 again to clear the spotlight. The swatch and hex field keep that color selected while you edit it.

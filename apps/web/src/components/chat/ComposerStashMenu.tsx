@@ -1,11 +1,17 @@
+import type { ResolvedKeybindingsConfig } from "@t3tools/contracts";
+import { DEFAULT_RESOLVED_KEYBINDINGS } from "@t3tools/shared/keybindings";
 import { FileIcon, XIcon } from "lucide-react";
-import { memo, useEffect, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useRef, useState } from "react";
 
+import {
+  type PickerNavigationDirection,
+  usePickerNavigationKeybindings,
+} from "../../pickerNavigation";
+import { type PromptStashEntry } from "../../promptStashStore";
 import { formatRelativeTimeLabel } from "../../timestampFormat";
 import { cn } from "~/lib/utils";
-import { type PromptStashEntry } from "../../promptStashStore";
-import { Command, CommandGroup, CommandItem, CommandList } from "../ui/command";
 import { Button } from "../ui/button";
+import { Command, CommandGroup, CommandItem, CommandList } from "../ui/command";
 
 const SNIPPET_MAX_CHARS = 90;
 
@@ -29,11 +35,24 @@ function stashEntrySnippet(entry: PromptStashEntry): string {
   return `(${attachmentCount} ${label}${attachmentCount === 1 ? "" : "s"})`;
 }
 
+export function nextStashHighlightId(
+  entries: ReadonlyArray<{ readonly id: string }>,
+  highlightedId: string | null,
+  direction: PickerNavigationDirection,
+): string | null {
+  if (entries.length === 0) return null;
+  const offset = direction === "next" ? 1 : -1;
+  const currentIndex = entries.findIndex((entry) => entry.id === highlightedId);
+  const normalizedIndex = currentIndex >= 0 ? currentIndex : offset === 1 ? -1 : 0;
+  const nextIndex = (normalizedIndex + offset + entries.length) % entries.length;
+  return entries[nextIndex]?.id ?? null;
+}
+
 /**
  * Popover listing the stashed prompts. Keyboard-first: opened by ⌘S on an
- * empty composer, navigated with arrows, restored with Enter, dismissed
- * with Escape. The listener runs capture-phase on window so it wins over
- * the Lexical editor's handlers while the menu is open.
+ * empty composer, navigated with arrows or Ctrl+N/P, restored with Enter,
+ * dismissed with Escape. The listener runs capture-phase on window so it
+ * wins over the Lexical editor's handlers while the menu is open.
  */
 export const ComposerStashMenu = memo(function ComposerStashMenu(props: {
   entries: ReadonlyArray<PromptStashEntry>;
@@ -41,10 +60,20 @@ export const ComposerStashMenu = memo(function ComposerStashMenu(props: {
   onRestore: (entry: PromptStashEntry) => void;
   onDelete: (entry: PromptStashEntry) => void;
   onClose: () => void;
+  keybindings?: ResolvedKeybindingsConfig;
 }) {
   const { entries, stashShortcutLabel, onRestore, onDelete, onClose } = props;
   const drawerRef = useRef<HTMLDivElement>(null);
   const [highlightedId, setHighlightedId] = useState<string | null>(entries[0]?.id ?? null);
+  const navigate = useCallback(
+    (direction: PickerNavigationDirection) => {
+      setHighlightedId((current) => nextStashHighlightId(entries, current, direction));
+    },
+    [entries],
+  );
+  usePickerNavigationKeybindings(props.keybindings ?? DEFAULT_RESOLVED_KEYBINDINGS, {
+    onNavigate: navigate,
+  });
 
   const highlightedEntry = entries.find((entry) => entry.id === highlightedId) ?? entries[0];
 
@@ -83,11 +112,7 @@ export const ComposerStashMenu = memo(function ComposerStashMenu(props: {
         if (entries.length === 0) return;
         event.preventDefault();
         event.stopPropagation();
-        const currentIndex = entries.findIndex((entry) => entry.id === highlightedId);
-        const offset = event.key === "ArrowDown" ? 1 : -1;
-        const normalizedIndex = currentIndex >= 0 ? currentIndex : offset === 1 ? -1 : 0;
-        const nextIndex = (normalizedIndex + offset + entries.length) % entries.length;
-        setHighlightedId(entries[nextIndex]?.id ?? null);
+        navigate(event.key === "ArrowDown" ? "next" : "previous");
         return;
       }
       if (event.key === "Enter") {
@@ -111,7 +136,7 @@ export const ComposerStashMenu = memo(function ComposerStashMenu(props: {
     };
     window.addEventListener("keydown", handler, true);
     return () => window.removeEventListener("keydown", handler, true);
-  }, [entries, highlightedEntry, highlightedId, onClose, onDelete, onRestore]);
+  }, [entries, highlightedEntry, navigate, onClose, onDelete, onRestore]);
 
   return (
     <Command autoHighlight={false} mode="none">
