@@ -18,7 +18,7 @@ export const shellEnvironment = createShellEnvironmentAtoms(connectionAtomRuntim
 export const environmentShell = createEnvironmentShellAtoms(connectionAtomRuntime);
 export const environmentSnapshotAtom = createEnvironmentSnapshotAtom(environmentShell.stateAtom);
 export const environmentShellSummaryAtom = createEnvironmentShellSummaryAtom({
-  catalogValueAtom: environmentCatalog.catalogValueAtom,
+  catalogValueAtom: Atom.make((get) => get(environmentCatalog.catalogValueAtom)),
   shellStateValueAtom: environmentShell.stateValueAtom,
 });
 
