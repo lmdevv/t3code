@@ -1,9 +1,9 @@
-import { useAtomValue } from "@effect/atom-react";
 import { ArrowDownIcon, ArrowUpIcon } from "lucide-react";
+import type { ResolvedKeybindingsConfig } from "@t3tools/contracts";
+import { DEFAULT_RESOLVED_KEYBINDINGS } from "@t3tools/shared/keybindings";
 import { type ComponentProps, type ReactNode, useLayoutEffect, useRef } from "react";
 
 import { usePickerNavigationKeybindings } from "~/pickerNavigation";
-import { primaryServerKeybindingsAtom } from "~/state/server";
 
 import { Command, CommandFooter, CommandInput, CommandPanel } from "./ui/command";
 import { Kbd, KbdGroup } from "./ui/kbd";
@@ -15,6 +15,7 @@ type CommandPaletteContentProps = Omit<ComponentProps<typeof Command>, "children
   readonly footerTrailing?: ReactNode;
   readonly inputAccessory?: ReactNode;
   readonly inputProps: ComponentProps<typeof CommandInput>;
+  readonly keybindings?: ResolvedKeybindingsConfig;
   readonly panelClassName?: string;
   readonly showBackHint?: boolean;
   readonly testId?: string;
@@ -32,13 +33,13 @@ export function CommandPaletteContent({
   footerTrailing,
   inputAccessory,
   inputProps,
+  keybindings = DEFAULT_RESOLVED_KEYBINDINGS,
   panelClassName,
   showBackHint,
   testId,
   ...commandProps
 }: CommandPaletteContentProps) {
   const inputRef = useRef<HTMLInputElement>(null);
-  const keybindings = useAtomValue(primaryServerKeybindingsAtom);
   usePickerNavigationKeybindings(keybindings);
 
   // Direct-open flows replace the initial palette view after the dialog has

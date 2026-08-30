@@ -2510,6 +2510,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     prompt,
     onPromptChange: setPromptFromTraits,
     planModeEnabled: settings.planModeEnabled,
+    keybindings,
   });
   const providerTraitsPickerInput = {
     provider: selectedProvider,
@@ -2525,6 +2526,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     isComposerOwned: true,
     open: isComposerModelOptionsPickerOpen,
     onOpenChange: setIsComposerModelOptionsPickerOpen,
+    keybindings,
   } satisfies Parameters<typeof renderProviderTraitsPicker>[0];
   const providerTraitsPicker = renderProviderTraitsPicker(providerTraitsPickerInput);
   const {
@@ -4878,6 +4880,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
 
       {composerControlsCompact ? (
         <CompactComposerControlsMenu
+          keybindings={keybindings}
           interactionMode={interactionMode}
           runtimeMode={runtimeMode}
           showInteractionModeToggle={planModeUiEnabled}
@@ -4920,6 +4923,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
               )}
             >
               <CompactComposerControlsMenu
+                keybindings={keybindings}
                 interactionMode={interactionMode}
                 runtimeMode={runtimeMode}
                 size="xs"
