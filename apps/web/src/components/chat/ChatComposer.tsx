@@ -1501,6 +1501,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     prompt,
     onPromptChange: setPromptFromTraits,
     planModeEnabled: settings.planModeEnabled,
+    keybindings,
   });
   const providerTraitsPicker = renderProviderTraitsPicker({
     provider: selectedProvider,
@@ -1515,6 +1516,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     planModeEnabled: settings.planModeEnabled,
     open: isComposerModelOptionsPickerOpen,
     onOpenChange: setIsComposerModelOptionsPickerOpen,
+    keybindings,
   });
   const pendingPrimaryAction = useMemo(
     () =>
@@ -4234,6 +4236,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                       onOpenChange={setIsComposerModelOptionsPickerOpen}
                       onToggleInteractionMode={toggleInteractionMode}
                       onRuntimeModeChange={handleRuntimeModeChange}
+                      keybindings={keybindings}
                     />
                   ) : (
                     <>
