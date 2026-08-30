@@ -6,6 +6,7 @@ import {
   type ScopedThreadRef,
   type ServerProviderModel,
 } from "@t3tools/contracts";
+import { useAtomValue } from "@effect/atom-react";
 import {
   applyClaudePromptEffortPrefix,
   buildProviderOptionSelectionsFromDescriptors,
@@ -41,6 +42,8 @@ import {
 } from "./ComposerControl";
 import { useComposerMenuProps } from "./composerEventScope";
 import { useComposerMenuState } from "./useComposerMenuState";
+import { usePickerNavigationKeybindings } from "../../pickerNavigation";
+import { primaryServerKeybindingsAtom } from "../../state/server";
 
 type ProviderOptions = ReadonlyArray<ProviderOptionSelection>;
 
@@ -283,6 +286,8 @@ export interface TraitsMenuContentProps {
   triggerVariant?: VariantProps<typeof buttonVariants>["variant"];
   triggerClassName?: string;
   isComposerOwned?: boolean;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }
 
 export const TraitsMenuContent = memo(function TraitsMenuContentImpl({
@@ -295,6 +300,8 @@ export const TraitsMenuContent = memo(function TraitsMenuContentImpl({
   modelOptions,
   allowPromptInjectedEffort = true,
   planModeEnabled,
+  open: _open,
+  onOpenChange: _onOpenChange,
   ...persistence
 }: TraitsMenuContentProps & TraitsPersistence) {
   const setProviderModelOptions = useComposerDraftStore((store) => store.setProviderModelOptions);
@@ -552,6 +559,8 @@ export const TraitsPicker = memo(function TraitsPicker({
   isComposerOwned,
   size = "sm",
   hidden = false,
+  open,
+  onOpenChange,
   ...persistence
 }: TraitsMenuContentProps &
   TraitsPersistence & {
@@ -559,7 +568,16 @@ export const TraitsPicker = memo(function TraitsPicker({
     hidden?: boolean;
   }) {
   const composerFloatingLayerProps = useComposerMenuProps();
-  const [isMenuOpen, setIsMenuOpen] = useComposerMenuState(hidden);
+  const [uncontrolledIsMenuOpen, setUncontrolledIsMenuOpen] = useComposerMenuState(hidden);
+  const isMenuOpen = !hidden && (open ?? uncontrolledIsMenuOpen);
+  const keybindings = useAtomValue(primaryServerKeybindingsAtom);
+  usePickerNavigationKeybindings(keybindings, { enabled: isMenuOpen });
+  const setIsMenuOpen = (nextOpen: boolean) => {
+    onOpenChange?.(nextOpen);
+    if (open === undefined) {
+      setUncontrolledIsMenuOpen(nextOpen);
+    }
+  };
   const { descriptors, primarySelectDescriptor, ultrathinkPromptControlled } =
     getTraitsSectionVisibility({
       provider,
@@ -695,3 +713,4 @@ export const TraitsPicker = memo(function TraitsPicker({
     </Menu>
   );
 });
+import { useAtomValue } from "@effect/atom-react";
