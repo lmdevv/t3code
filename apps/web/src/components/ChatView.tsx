@@ -170,6 +170,7 @@ import { useMediaQuery } from "../hooks/useMediaQuery";
 import { RIGHT_PANEL_INLINE_LAYOUT_MEDIA_QUERY } from "../rightPanelLayout";
 import {
   pullRequestSurface,
+  rightPanelTerminalShortcutAction,
   selectActiveRightPanel,
   selectActiveRightPanelSurface,
   selectThreadRightPanelState,
@@ -5629,14 +5630,19 @@ export default function ChatView(props: ChatViewProps) {
   const pullRequestSurfaceAvailable = supportsPullRequests && linkedThreadPullRequest !== null;
   const openRightPanelTerminal = useCallback(() => {
     if (!activeThreadRef) return;
+    const action = rightPanelTerminalShortcutAction(rightPanelState);
+    if (action === "close") {
+      closePreviewPanel();
+      return;
+    }
     const existing = rightPanelState.surfaces.find((surface) => surface.kind === "terminal");
-    if (!existing) {
+    if (action === "create" || !existing) {
       addTerminalSurface();
       return;
     }
     useRightPanelStore.getState().activateSurface(activeThreadRef, existing.id);
     setTerminalFocusRequestId((value) => value + 1);
-  }, [activeThreadRef, addTerminalSurface, rightPanelState.surfaces]);
+  }, [activeThreadRef, addTerminalSurface, closePreviewPanel, rightPanelState]);
   const supportsSettlement = serverConfig?.environment.capabilities.threadSettlement === true;
   const supportsSnooze = serverConfig?.environment.capabilities.threadSnooze === true;
   const supportsPinning = serverConfig?.environment.capabilities.threadPinning === true;
