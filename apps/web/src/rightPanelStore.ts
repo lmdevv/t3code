@@ -671,6 +671,15 @@ export const useRightPanelStore = create<RightPanelStoreState>()(
   ),
 );
 
+export function rightPanelTerminalShortcutAction(
+  state: ThreadRightPanelState,
+): "close" | "activate" | "create" {
+  const active = state.surfaces.find((surface) => surface.id === state.activeSurfaceId);
+  if (state.isOpen && active?.kind === "terminal") return "close";
+  if (state.surfaces.some((surface) => surface.kind === "terminal")) return "activate";
+  return "create";
+}
+
 export function selectThreadRightPanelState(
   byThreadKey: Record<string, ThreadRightPanelState>,
   ref: ScopedThreadRef | null | undefined,
