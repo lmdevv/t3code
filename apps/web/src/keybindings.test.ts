@@ -88,7 +88,6 @@ const DEFAULT_BINDINGS = compile([
   {
     shortcut: modShortcut("j", { shiftKey: true }),
     command: "rightPanel.openTerminal",
-    whenAst: whenNot(whenIdentifier("terminalFocus")),
   },
   {
     shortcut: modShortcut("f", { shiftKey: true }),
@@ -798,6 +797,16 @@ describe("resolveShortcutCommand", () => {
         context: { pickerOpen: false, terminalFocus: false },
       }),
       "filePicker.toggle",
+    );
+  });
+
+  it("resolves the right-panel terminal shortcut while the terminal is focused", () => {
+    assert.strictEqual(
+      resolveShortcutCommand(event({ key: "j", metaKey: true, shiftKey: true }), DEFAULT_BINDINGS, {
+        platform: "MacIntel",
+        context: { terminalFocus: true },
+      }),
+      "rightPanel.openTerminal",
     );
   });
 
