@@ -1,3 +1,4 @@
+import { useAtomValue } from "@effect/atom-react";
 import { ProviderInteractionMode, RuntimeMode } from "@t3tools/contracts";
 import { memo, type ReactNode } from "react";
 import { EllipsisIcon } from "lucide-react";
@@ -12,6 +13,8 @@ import {
 import { ComposerControl, ComposerControlIcon } from "./ComposerControl";
 import { composerFloatingLayerProps } from "./composerEventScope";
 import { useComposerMenuState } from "./useComposerMenuState";
+import { usePickerNavigationKeybindings } from "../../pickerNavigation";
+import { primaryServerKeybindingsAtom } from "../../state/server";
 
 export const CompactComposerControlsMenu = memo(function CompactComposerControlsMenu(props: {
   interactionMode: ProviderInteractionMode;
@@ -25,11 +28,20 @@ export const CompactComposerControlsMenu = memo(function CompactComposerControls
    * open menu closes when its trigger hides.
    */
   hidden?: boolean;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
   onToggleInteractionMode: () => void;
   onRuntimeModeChange: (mode: RuntimeMode) => void;
 }) {
   const size = props.size ?? "sm";
-  const [open, setOpen] = useComposerMenuState(props.hidden);
+  const [uncontrolledOpen, setUncontrolledOpen] = useComposerMenuState(props.hidden);
+  const open = !props.hidden && (props.open ?? uncontrolledOpen);
+  const keybindings = useAtomValue(primaryServerKeybindingsAtom);
+  usePickerNavigationKeybindings(keybindings, { enabled: open });
+  const setOpen = (nextOpen: boolean) => {
+    props.onOpenChange?.(nextOpen);
+    if (props.open === undefined) setUncontrolledOpen(nextOpen);
+  };
 
   return (
     <Menu open={open} onOpenChange={setOpen}>
