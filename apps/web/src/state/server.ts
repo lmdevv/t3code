@@ -32,7 +32,7 @@ export const serverEnvironment = createServerEnvironmentAtoms(connectionAtomRunt
   usageLimitsCommand: true,
 });
 export const environmentServerConfigsAtom = createEnvironmentServerConfigsAtom({
-  catalogValueAtom: environmentCatalog.catalogValueAtom,
+  catalogValueAtom: Atom.make((get) => get(environmentCatalog.catalogValueAtom)),
   serverConfigValueAtom: serverEnvironment.configValueAtom,
 });
 
