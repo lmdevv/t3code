@@ -9,6 +9,7 @@ import { Decoration, DecorationSet } from "@tiptap/pm/view";
 import type {
   AssistantCitation,
   ComposerContextClipboardFragment,
+  ResolvedKeybindingsConfig,
   ServerProviderSkill,
 } from "@t3tools/contracts";
 import {
@@ -77,6 +78,8 @@ import { Tooltip, TooltipPopup, TooltipTrigger } from "./ui/tooltip";
 import { importPastedComposerText } from "./composerInlineTokenPaste";
 import { didComposerSelectionChangeVisibly } from "./composerSelection";
 import type { ComposerDraftContextRecords } from "./composerContextPresentation";
+import { resolveShortcutCommand } from "~/keybindings";
+import { pickerNavigationDirectionFromCommand } from "~/pickerNavigation";
 
 export interface ComposerPromptEditorHandle {
   focus: () => void;
@@ -122,6 +125,7 @@ export interface ComposerPromptEditorProps {
   disabled: boolean;
   placeholder: string;
   containerClassName?: string;
+  keybindings?: ResolvedKeybindingsConfig;
   className?: string;
   placeholderClassName?: string;
   onChange: (
@@ -593,6 +597,7 @@ function ComposerPromptEditorTiptapInner(props: ComposerPromptEditorProps) {
     disabled,
     placeholder,
     containerClassName,
+    keybindings = [],
     className,
     placeholderClassName,
     onChange,
@@ -612,6 +617,7 @@ function ComposerPromptEditorTiptapInner(props: ComposerPromptEditorProps) {
   const onChangeRef = useRef(onChange);
   const onVisibleSelectionChangeRef = useRef(onVisibleSelectionChange);
   const onCommandKeyDownRef = useRef(onCommandKeyDown);
+  const keybindingsRef = useRef(keybindings);
   const buildFragmentRef = useRef(buildContextClipboardFragment);
   const importFragmentRef = useRef(importContextFragment);
   const skillsRef = useRef(skills);
@@ -629,6 +635,9 @@ function ComposerPromptEditorTiptapInner(props: ComposerPromptEditorProps) {
   useEffect(() => {
     onCommandKeyDownRef.current = onCommandKeyDown;
   }, [onCommandKeyDown]);
+  useEffect(() => {
+    keybindingsRef.current = keybindings;
+  }, [keybindings]);
   useEffect(() => {
     buildFragmentRef.current = buildContextClipboardFragment;
   }, [buildContextClipboardFragment]);
@@ -949,8 +958,16 @@ function ComposerPromptEditorTiptapInner(props: ComposerPromptEditorProps) {
             });
           }
           if (!handler) return false;
-          const key =
-            event.key === "Tab"
+          const pickerDirection = pickerNavigationDirectionFromCommand(
+            resolveShortcutCommand(event, keybindingsRef.current, {
+              context: { pickerOpen: true },
+            }),
+          );
+          const key = pickerDirection
+            ? pickerDirection === "next"
+              ? ("ArrowDown" as const)
+              : ("ArrowUp" as const)
+            : event.key === "Tab"
               ? ("Tab" as const)
               : event.key === "ArrowDown"
                 ? ("ArrowDown" as const)

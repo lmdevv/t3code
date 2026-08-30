@@ -1273,6 +1273,7 @@ export interface ChatComposerHandle {
   openModelPicker: () => void;
   toggleModelPicker: () => void;
   openControl: (command: KeybindingCommand) => void;
+  toggleModelOptionsPicker: () => void;
   isModelPickerOpen: () => boolean;
   compactContext: () => void;
   readSnapshot: () => {
@@ -2117,6 +2118,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
   const [isComposerFooterCompact, setIsComposerFooterCompact] = useState(false);
   const [isComposerPrimaryActionsCompact, setIsComposerPrimaryActionsCompact] = useState(false);
   const [isComposerModelPickerOpen, setIsComposerModelPickerOpen] = useState(false);
+  const [isComposerModelOptionsPickerOpen, setIsComposerModelOptionsPickerOpen] = useState(false);
   const isMobileViewport = useMediaQuery("max-sm");
   const {
     isComposerFocused,
@@ -2655,6 +2657,8 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     onPromptChange: setPromptFromTraits,
     planModeEnabled: settings.planModeEnabled,
     isComposerOwned: true,
+    open: isComposerModelOptionsPickerOpen,
+    onOpenChange: setIsComposerModelOptionsPickerOpen,
   } satisfies Parameters<typeof renderProviderTraitsPicker>[0];
   const providerTraitsPicker = renderProviderTraitsPicker(providerTraitsPickerInput);
   const {
@@ -5091,7 +5095,10 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
               ),
             }
           : {})}
-        onOpenChange={setIsComposerModelPickerOpen}
+        onOpenChange={(open) => {
+          if (open) setIsComposerModelOptionsPickerOpen(false);
+          setIsComposerModelPickerOpen(open);
+        }}
         getModelDisabledReason={getModelDisabledReason}
         onInstanceModelChange={(instanceId, model) => {
           setMultipleModelSelections(null);
@@ -5141,6 +5148,12 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
             traitsMenuContent={
               hiddenRestingBlockIds.includes("traits") ? providerTraitsMenuContent : undefined
             }
+            {...(hiddenRestingBlockIds.includes("traits")
+              ? {
+                  open: isComposerModelOptionsPickerOpen,
+                  onOpenChange: setIsComposerModelOptionsPickerOpen,
+                }
+              : {})}
             onToggleInteractionMode={toggleInteractionMode}
             onRuntimeModeChange={handleRuntimeModeChange}
           />
@@ -5835,7 +5848,21 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
       setIsComposerScrollCollapsed(false);
       setIsComposerFocused(true);
     }
+    setIsComposerModelOptionsPickerOpen(false);
     setIsComposerModelPickerOpen(true);
+  }, [composerControlsHidden, setIsComposerFocused, setIsComposerScrollCollapsed]);
+
+  const openModelOptionsPicker = useCallback(() => {
+    if (composerControlsHidden) {
+      if (composerBlurFrameRef.current !== null) {
+        window.cancelAnimationFrame(composerBlurFrameRef.current);
+        composerBlurFrameRef.current = null;
+      }
+      setIsComposerScrollCollapsed(false);
+      setIsComposerFocused(true);
+    }
+    setIsComposerModelPickerOpen(false);
+    setIsComposerModelOptionsPickerOpen(true);
   }, [composerControlsHidden, setIsComposerFocused, setIsComposerScrollCollapsed]);
 
   useImperativeHandle(
@@ -5954,8 +5981,15 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
         trigger.focus({ preventScroll: true });
         trigger.click();
       },
+      toggleModelOptionsPicker: () => {
+        if (isComposerModelOptionsPickerOpen) {
+          setIsComposerModelOptionsPickerOpen(false);
+        } else {
+          openModelOptionsPicker();
+        }
+      },
       compactContext: compactThreadContext,
-      isModelPickerOpen: () => isComposerModelPickerOpen,
+      isModelPickerOpen: () => isComposerModelPickerOpen || isComposerModelOptionsPickerOpen,
       readSnapshot: () => {
         return readComposerSnapshot();
       },
@@ -6076,6 +6110,8 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
       applyPromptReplacement,
       isComposerModelPickerOpen,
       openModelPicker,
+      isComposerModelOptionsPickerOpen,
+      openModelOptionsPicker,
       readComposerSnapshot,
       resetComposerTrigger,
       setComposerTrigger,
@@ -6845,6 +6881,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                 ) : null}
                 <ComposerContextActionsContext value={composerContextActions}>
                   <ComposerPromptEditor
+                    keybindings={keybindings}
                     editorRef={composerEditorRef}
                     richTextEnabled={settings.composerRichTextEnabled}
                     value={

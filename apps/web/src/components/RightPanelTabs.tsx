@@ -11,6 +11,7 @@ import type {
   PreviewSessionSnapshot,
   ProjectId,
   PullRequestState,
+  ResolvedKeybindingsConfig,
 } from "@t3tools/contracts";
 import { getTerminalLabel } from "@t3tools/shared/terminalLabels";
 import {
@@ -78,6 +79,7 @@ import { previewBridge } from "./preview/previewBridge";
 import { PierreEntryIcon } from "./chat/PierreEntryIcon";
 import { resolvePullRequestState } from "./pullRequest/pullRequestPresentation";
 import { PullRequestGlyph } from "~/components/pullRequest/pullRequestIcons";
+import { usePickerNavigationKeybindings } from "~/pickerNavigation";
 
 interface RightPanelTabsProps {
   mode: PreviewPanelMode;
@@ -134,6 +136,7 @@ interface RightPanelTabsProps {
   pullRequestStatusSeeds?: Readonly<Record<string, PullRequestTabStatusSeed>>;
   /** Running + waiting subagents; badges the Agents card in the empty state. */
   liveAgentCount: number;
+  keybindings?: ResolvedKeybindingsConfig;
   children: ReactNode;
 }
 
@@ -335,6 +338,7 @@ function RightPanelEmptyState(props: {
   agentsAvailable: boolean;
   deviceAvailable: boolean;
   liveAgentCount: number;
+  keybindings: ResolvedKeybindingsConfig;
 }) {
   // -1 means no highlight: it only appears on hover or arrow use.
   const [highlight, setHighlight] = useState(-1);
@@ -429,6 +433,17 @@ function RightPanelEmptyState(props: {
   useEffect(() => {
     shortcutActionsRef.current = availableActions;
   });
+  const navigate = useCallback((direction: "previous" | "next") => {
+    const actionCount = shortcutActionsRef.current.length;
+    if (actionCount === 0) return;
+    setHighlight((current) => {
+      if (direction === "next") {
+        return (current + 1 + actionCount) % actionCount;
+      }
+      return current === -1 ? actionCount - 1 : (current - 1 + actionCount) % actionCount;
+    });
+  }, []);
+  usePickerNavigationKeybindings(props.keybindings, { onNavigate: navigate });
   useEffect(() => {
     const handler = (event: KeyboardEvent) => {
       const action = surfaceShortcutActionForKey(shortcutActionsRef.current, event);
@@ -831,6 +846,8 @@ export function RightPanelTabs(props: RightPanelTabsProps) {
   const tabListRef = useRef<HTMLDivElement>(null);
   const [renamingDevice, setRenamingDevice] = useState<string | null>(null);
   const [addSurfaceMenuOpen, setAddSurfaceMenuOpen] = useState(false);
+  const keybindings = props.keybindings ?? [];
+  usePickerNavigationKeybindings(keybindings, { enabled: addSurfaceMenuOpen });
   const [tabScrollState, setTabScrollState] = useState({
     hasOverflow: false,
     canScrollLeft: false,
@@ -1425,6 +1442,7 @@ export function RightPanelTabs(props: RightPanelTabsProps) {
             agentsAvailable={props.agentsAvailable}
             deviceAvailable={props.deviceAvailable}
             liveAgentCount={props.liveAgentCount}
+            keybindings={keybindings}
           />
         ) : (
           props.children
