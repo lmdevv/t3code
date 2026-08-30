@@ -210,6 +210,12 @@ it.layer(NodeServices.layer)("keybindings", (it) => {
       assert.equal(defaultsByCommand.get("sidebar.toggle"), "mod+b");
       assert.equal(defaultsByCommand.get("rightPanel.toggle"), "mod+alt+b");
       assert.equal(defaultsByCommand.get("rightPanel.openTerminal"), "mod+shift+j");
+      assert.equal(
+        Keybindings.DEFAULT_KEYBINDINGS.find(
+          (binding) => binding.command === "rightPanel.openTerminal",
+        )?.when,
+        undefined,
+      );
       assert.equal(defaultsByCommand.get("rightPanel.openFiles"), "mod+shift+f");
       assert.equal(defaultsByCommand.get("rightPanel.openPullRequest"), "mod+alt+r");
       assert.equal(defaultsByCommand.get("rightPanel.openAgents"), "mod+shift+a");
@@ -315,13 +321,42 @@ it.layer(NodeServices.layer)("keybindings", (it) => {
       }).pipe(Effect.provide(makeKeybindingsLayer())),
   );
 
-  it.effect("migrates only the exact legacy preview and project-search defaults", () =>
+  it.effect(
+    "migrates only the exact legacy preview, project-search, and terminal-panel defaults",
+    () =>
+      Effect.gen(function* () {
+        const { keybindingsConfigPath } = yield* ServerConfig.ServerConfig;
+        yield* writeKeybindingsConfig(keybindingsConfigPath, [
+          { key: "mod+shift+j", command: "preview.toggle" },
+          { key: "mod+shift+f", command: "projectSearch.toggle", when: "!terminalFocus" },
+          { key: "mod+shift+x", command: "filePicker.toggle", when: "!terminalFocus" },
+        ]);
+
+        yield* Effect.gen(function* () {
+          const keybindings = yield* Keybindings.Keybindings;
+          yield* keybindings.syncDefaultKeybindingsOnStartup;
+        });
+
+        const persisted = yield* readKeybindingsConfig(keybindingsConfigPath);
+        const byCommand = new Map(persisted.map((entry) => [entry.command, entry]));
+        assert.equal(byCommand.get("preview.toggle")?.key, "mod+shift+b");
+        assert.equal(byCommand.get("projectSearch.toggle")?.key, "mod+alt+f");
+        assert.equal(byCommand.get("filePicker.toggle")?.key, "mod+shift+x");
+        assert.equal(byCommand.get("rightPanel.openTerminal")?.key, "mod+shift+j");
+        assert.equal(byCommand.get("rightPanel.openTerminal")?.when, undefined);
+        assert.equal(byCommand.get("rightPanel.openFiles")?.key, "mod+shift+f");
+      }).pipe(Effect.provide(makeKeybindingsLayer())),
+  );
+
+  it.effect("drops the terminal-focus guard from the default right-panel terminal shortcut", () =>
     Effect.gen(function* () {
       const { keybindingsConfigPath } = yield* ServerConfig.ServerConfig;
       yield* writeKeybindingsConfig(keybindingsConfigPath, [
-        { key: "mod+shift+j", command: "preview.toggle" },
-        { key: "mod+shift+f", command: "projectSearch.toggle", when: "!terminalFocus" },
-        { key: "mod+shift+x", command: "filePicker.toggle", when: "!terminalFocus" },
+        {
+          key: "mod+shift+j",
+          command: "rightPanel.openTerminal",
+          when: "!terminalFocus",
+        },
       ]);
 
       yield* Effect.gen(function* () {
@@ -330,12 +365,9 @@ it.layer(NodeServices.layer)("keybindings", (it) => {
       });
 
       const persisted = yield* readKeybindingsConfig(keybindingsConfigPath);
-      const byCommand = new Map(persisted.map((entry) => [entry.command, entry]));
-      assert.equal(byCommand.get("preview.toggle")?.key, "mod+shift+b");
-      assert.equal(byCommand.get("projectSearch.toggle")?.key, "mod+alt+f");
-      assert.equal(byCommand.get("filePicker.toggle")?.key, "mod+shift+x");
-      assert.equal(byCommand.get("rightPanel.openTerminal")?.key, "mod+shift+j");
-      assert.equal(byCommand.get("rightPanel.openFiles")?.key, "mod+shift+f");
+      const terminalRule = persisted.find((entry) => entry.command === "rightPanel.openTerminal");
+      assert.equal(terminalRule?.key, "mod+shift+j");
+      assert.equal(terminalRule?.when, undefined);
     }).pipe(Effect.provide(makeKeybindingsLayer())),
   );
 

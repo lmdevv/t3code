@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it } from "vite-plus/test";
 import {
   migratePersistedRightPanelState,
   pullRequestSurfaceId,
+  rightPanelTerminalShortcutAction,
   selectActiveRightPanel,
   selectActiveRightPanelSurface,
   selectSelectedRightPanelSurface,
@@ -563,6 +564,33 @@ describe("rightPanelStore", () => {
       },
     ]);
     expect(state.activeSurfaceId).toBe("terminal:term-2");
+  });
+
+  it("toggles an active terminal panel closed without dropping the session", () => {
+    expect(
+      rightPanelTerminalShortcutAction({
+        isOpen: false,
+        activeSurfaceId: null,
+        surfaces: [],
+      }),
+    ).toBe("create");
+
+    useRightPanelStore.getState().openTerminal(refA, "term-1");
+    const openState = selectThreadRightPanelState(useRightPanelStore.getState().byThreadKey, refA);
+    expect(rightPanelTerminalShortcutAction(openState)).toBe("close");
+
+    useRightPanelStore.getState().close(refA);
+    const hiddenState = selectThreadRightPanelState(
+      useRightPanelStore.getState().byThreadKey,
+      refA,
+    );
+    expect(hiddenState.isOpen).toBe(false);
+    expect(hiddenState.surfaces).toHaveLength(1);
+    expect(rightPanelTerminalShortcutAction(hiddenState)).toBe("activate");
+
+    useRightPanelStore.getState().open(refA, "files");
+    const filesState = selectThreadRightPanelState(useRightPanelStore.getState().byThreadKey, refA);
+    expect(rightPanelTerminalShortcutAction(filesState)).toBe("activate");
   });
 
   it("tracks split panes and the active pane within a terminal surface", () => {
