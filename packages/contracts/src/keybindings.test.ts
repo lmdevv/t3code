@@ -48,6 +48,12 @@ it.effect("parses keybinding rules", () =>
     });
     assert.strictEqual(parsedRightPanelToggleMaximized.command, "rightPanel.toggleMaximized");
 
+    const parsedRightPanelTerminal = yield* decode(KeybindingRule, {
+      key: "mod+shift+j",
+      command: "rightPanel.openTerminal",
+    });
+    assert.strictEqual(parsedRightPanelTerminal.command, "rightPanel.openTerminal");
+
     const parsedClose = yield* decode(KeybindingRule, {
       key: "mod+w",
       command: "terminal.close",
@@ -95,6 +101,19 @@ it.effect("parses keybinding rules", () =>
       command: "modelPicker.toggle",
     });
     assert.strictEqual(parsedModelPickerToggle.command, "modelPicker.toggle");
+
+    const parsedModelOptionsPickerToggle = yield* decode(KeybindingRule, {
+      key: "mod+shift+,",
+      command: "modelOptionsPicker.toggle",
+    });
+    assert.strictEqual(parsedModelOptionsPickerToggle.command, "modelOptionsPicker.toggle");
+
+    const parsedPickerNext = yield* decode(KeybindingRule, {
+      key: "ctrl+n",
+      command: "picker.next",
+      when: "pickerOpen",
+    });
+    assert.strictEqual(parsedPickerNext.command, "picker.next");
 
     const parsedModelPickerJump = yield* decode(KeybindingRule, {
       key: "mod+1",

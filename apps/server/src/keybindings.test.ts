@@ -201,11 +201,19 @@ it.layer(NodeServices.layer)("keybindings", (it) => {
       assert.equal(defaultsByCommand.get("thread.jump.1"), "mod+1");
       assert.equal(defaultsByCommand.get("thread.jump.9"), "mod+9");
       assert.equal(defaultsByCommand.get("modelPicker.toggle"), "mod+shift+m");
+      assert.equal(defaultsByCommand.get("modelOptionsPicker.toggle"), "mod+shift+,");
+      assert.equal(defaultsByCommand.get("picker.previous"), "ctrl+p");
+      assert.equal(defaultsByCommand.get("picker.next"), "ctrl+n");
       assert.equal(defaultsByCommand.get("themeEditor.toggle"), "mod+alt+shift+t");
       assert.equal(defaultsByCommand.get("filePicker.toggle"), "mod+p");
-      assert.equal(defaultsByCommand.get("projectSearch.toggle"), "mod+shift+f");
+      assert.equal(defaultsByCommand.get("projectSearch.toggle"), "mod+alt+f");
+      assert.equal(defaultsByCommand.get("preview.toggle"), "mod+shift+b");
       assert.equal(defaultsByCommand.get("sidebar.toggle"), "mod+b");
       assert.equal(defaultsByCommand.get("rightPanel.toggle"), "mod+alt+b");
+      assert.equal(defaultsByCommand.get("rightPanel.openTerminal"), "mod+shift+j");
+      assert.equal(defaultsByCommand.get("rightPanel.openFiles"), "mod+shift+f");
+      assert.equal(defaultsByCommand.get("rightPanel.openPullRequest"), "mod+alt+r");
+      assert.equal(defaultsByCommand.get("rightPanel.openAgents"), "mod+shift+a");
       assert.isFalse(defaultsByCommand.has("rightPanel.toggleMaximized"));
       assert.equal(defaultsByCommand.get("terminal.splitVertical"), "mod+shift+d");
       assert.equal(defaultsByCommand.get("modelPicker.jump.1"), "mod+1");
@@ -306,6 +314,30 @@ it.layer(NodeServices.layer)("keybindings", (it) => {
         }
         assert.isTrue(byCommand.has("script.run-tests.run"));
       }).pipe(Effect.provide(makeKeybindingsLayer())),
+  );
+
+  it.effect("migrates only the exact legacy preview and project-search defaults", () =>
+    Effect.gen(function* () {
+      const { keybindingsConfigPath } = yield* ServerConfig.ServerConfig;
+      yield* writeKeybindingsConfig(keybindingsConfigPath, [
+        { key: "mod+shift+j", command: "preview.toggle" },
+        { key: "mod+shift+f", command: "projectSearch.toggle", when: "!terminalFocus" },
+        { key: "mod+shift+x", command: "filePicker.toggle", when: "!terminalFocus" },
+      ]);
+
+      yield* Effect.gen(function* () {
+        const keybindings = yield* Keybindings.Keybindings;
+        yield* keybindings.syncDefaultKeybindingsOnStartup;
+      });
+
+      const persisted = yield* readKeybindingsConfig(keybindingsConfigPath);
+      const byCommand = new Map(persisted.map((entry) => [entry.command, entry]));
+      assert.equal(byCommand.get("preview.toggle")?.key, "mod+shift+b");
+      assert.equal(byCommand.get("projectSearch.toggle")?.key, "mod+alt+f");
+      assert.equal(byCommand.get("filePicker.toggle")?.key, "mod+shift+x");
+      assert.equal(byCommand.get("rightPanel.openTerminal")?.key, "mod+shift+j");
+      assert.equal(byCommand.get("rightPanel.openFiles")?.key, "mod+shift+f");
+    }).pipe(Effect.provide(makeKeybindingsLayer())),
   );
 
   it.effect("skips conflicting default keybindings on startup and logs a detailed warning", () => {
