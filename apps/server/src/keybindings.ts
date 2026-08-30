@@ -123,6 +123,47 @@ function hasSameShortcutContext(left: KeybindingRule, right: KeybindingRule): bo
   return leftContext === rightContext;
 }
 
+const LEGACY_DEFAULT_KEYBINDING_MIGRATIONS: ReadonlyArray<{
+  readonly from: KeybindingRule;
+  readonly to: KeybindingRule;
+}> = [
+  {
+    from: { key: "mod+shift+j", command: "preview.toggle" },
+    to: { key: "mod+shift+b", command: "preview.toggle" },
+  },
+  {
+    from: {
+      key: "mod+shift+f",
+      command: "projectSearch.toggle",
+      when: "!terminalFocus",
+    },
+    to: { key: "mod+alt+f", command: "projectSearch.toggle", when: "!terminalFocus" },
+  },
+];
+
+function migrateLegacyDefaultKeybindings(config: readonly KeybindingRule[]): {
+  readonly keybindings: readonly KeybindingRule[];
+  readonly migratedCommands: readonly KeybindingRule["command"][];
+} {
+  let keybindings = [...config];
+  const migratedCommands: KeybindingRule["command"][] = [];
+
+  for (const migration of LEGACY_DEFAULT_KEYBINDING_MIGRATIONS) {
+    const sourceIndex = keybindings.findIndex((entry) =>
+      isSameKeybindingRule(entry, migration.from),
+    );
+    if (sourceIndex === -1) continue;
+    const destinationClaimed = keybindings.some(
+      (entry, index) => index !== sourceIndex && hasSameShortcutContext(entry, migration.to),
+    );
+    if (destinationClaimed) continue;
+    keybindings[sourceIndex] = migration.to;
+    migratedCommands.push(migration.to.command);
+  }
+
+  return { keybindings, migratedCommands };
+}
+
 function keybindingRuleFromUpsertInput(input: ServerUpsertKeybindingInput): KeybindingRule {
   return input.when === undefined
     ? { key: input.key, command: input.command }
@@ -492,7 +533,14 @@ const make = Effect.gen(function* () {
         yield* Cache.invalidate(resolvedConfigCache, resolvedConfigCacheKey);
         return;
       }
-      const customConfig = runtimeConfig.keybindings;
+      const migration = migrateLegacyDefaultKeybindings(runtimeConfig.keybindings);
+      const customConfig = migration.keybindings;
+      if (migration.migratedCommands.length > 0) {
+        yield* Effect.logInfo("migrated legacy default keybindings", {
+          path: keybindingsConfigPath,
+          commands: migration.migratedCommands,
+        });
+      }
       const existingCommands = new Set(customConfig.map((entry) => entry.command));
       const missingDefaults: KeybindingRule[] = [];
       const shortcutConflictWarnings: Array<{
@@ -529,7 +577,7 @@ const make = Effect.gen(function* () {
           reason: "shortcut context already used by existing rule",
         });
       }
-      if (missingDefaults.length === 0) {
+      if (missingDefaults.length === 0 && migration.migratedCommands.length === 0) {
         yield* Cache.invalidate(resolvedConfigCache, resolvedConfigCacheKey);
         return;
       }
@@ -558,7 +606,7 @@ const make = Effect.gen(function* () {
           commands: skippedDefaults.map((rule) => rule.command),
         });
       }
-      if (defaultsToAppend.length === 0) {
+      if (defaultsToAppend.length === 0 && migration.migratedCommands.length === 0) {
         yield* Cache.invalidate(resolvedConfigCache, resolvedConfigCacheKey);
         return;
       }

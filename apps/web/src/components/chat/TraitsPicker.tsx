@@ -33,6 +33,8 @@ import { getProviderModelCapabilities } from "../../providerModels";
 import { cn } from "~/lib/utils";
 import { Badge } from "../ui/badge";
 import { ComposerControl, ComposerControlChevron, ComposerControlIcon } from "./ComposerControl";
+import { usePickerNavigationKeybindings } from "../../pickerNavigation";
+import { primaryServerKeybindingsAtom } from "../../state/server";
 
 type ProviderOptions = ReadonlyArray<ProviderOptionSelection>;
 
@@ -274,6 +276,8 @@ export interface TraitsMenuContentProps {
   planModeEnabled: boolean;
   triggerVariant?: VariantProps<typeof buttonVariants>["variant"];
   triggerClassName?: string;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }
 
 export const TraitsMenuContent = memo(function TraitsMenuContentImpl({
@@ -286,6 +290,8 @@ export const TraitsMenuContent = memo(function TraitsMenuContentImpl({
   modelOptions,
   allowPromptInjectedEffort = true,
   planModeEnabled,
+  open: _open,
+  onOpenChange: _onOpenChange,
   ...persistence
 }: TraitsMenuContentProps & TraitsPersistence) {
   const setProviderModelOptions = useComposerDraftStore((store) => store.setProviderModelOptions);
@@ -540,9 +546,20 @@ export const TraitsPicker = memo(function TraitsPicker({
   planModeEnabled,
   triggerVariant,
   triggerClassName,
+  open,
+  onOpenChange,
   ...persistence
 }: TraitsMenuContentProps & TraitsPersistence) {
-  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [uncontrolledIsMenuOpen, setUncontrolledIsMenuOpen] = useState(false);
+  const isMenuOpen = open ?? uncontrolledIsMenuOpen;
+  const keybindings = useAtomValue(primaryServerKeybindingsAtom);
+  usePickerNavigationKeybindings(keybindings, { enabled: isMenuOpen });
+  const setIsMenuOpen = (nextOpen: boolean) => {
+    onOpenChange?.(nextOpen);
+    if (open === undefined) {
+      setUncontrolledIsMenuOpen(nextOpen);
+    }
+  };
   const { descriptors, primarySelectDescriptor, ultrathinkPromptControlled } =
     getTraitsSectionVisibility({
       provider,
@@ -639,3 +656,4 @@ export const TraitsPicker = memo(function TraitsPicker({
     </Menu>
   );
 });
+import { useAtomValue } from "@effect/atom-react";

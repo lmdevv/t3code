@@ -41,6 +41,7 @@ import {
   type ProviderInstanceEntry,
 } from "../../providerInstances";
 import { providerModelKey, sortProviderModelItems } from "../../modelOrdering";
+import { usePickerNavigationKeybindings } from "../../pickerNavigation";
 
 type ModelPickerItem = {
   slug: string;
@@ -163,6 +164,7 @@ export const ModelPickerContent = memo(function ModelPickerContent(props: {
     [providedKeybindings],
   );
   const updateSettings = useUpdateClientSettings();
+  usePickerNavigationKeybindings(keybindings);
 
   const focusSearchInput = useCallback(() => {
     searchInputRef.current?.focus({ preventScroll: true });

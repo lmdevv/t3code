@@ -5,7 +5,7 @@ import { LexicalErrorBoundary } from "@lexical/react/LexicalErrorBoundary";
 import { HistoryPlugin } from "@lexical/react/LexicalHistoryPlugin";
 import { OnChangePlugin } from "@lexical/react/LexicalOnChangePlugin";
 import { PlainTextPlugin } from "@lexical/react/LexicalPlainTextPlugin";
-import { type ServerProviderSkill } from "@t3tools/contracts";
+import { type ResolvedKeybindingsConfig, type ServerProviderSkill } from "@t3tools/contracts";
 import { serializeComposerFileLink } from "@t3tools/shared/composerTrigger";
 import {
   $applyNodeReplacement,
@@ -82,6 +82,8 @@ import { ComposerPendingTerminalContextChip } from "./chat/ComposerPendingTermin
 import { formatProviderSkillDisplayName } from "@t3tools/client-runtime/providerSkills";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "./ui/tooltip";
 import { registerComposerInlineTokenPaste } from "./composerInlineTokenPaste";
+import { resolveShortcutCommand } from "~/keybindings";
+import { pickerNavigationDirectionFromCommand } from "~/pickerNavigation";
 
 const COMPOSER_EDITOR_HMR_KEY = `composer-editor-${Math.random().toString(36).slice(2)}`;
 const SURROUND_SYMBOLS: [string, string][] = [
@@ -884,6 +886,7 @@ interface ComposerPromptEditorProps {
   skills: ReadonlyArray<ServerProviderSkill>;
   disabled: boolean;
   placeholder: string;
+  keybindings?: ResolvedKeybindingsConfig;
   className?: string;
   onRemoveTerminalContext: (contextId: string) => void;
   onChange: (
@@ -902,6 +905,7 @@ interface ComposerPromptEditorProps {
 }
 
 function ComposerCommandKeyPlugin(props: {
+  keybindings: ResolvedKeybindingsConfig;
   onCommandKeyDown?: (
     key: "ArrowDown" | "ArrowUp" | "Enter" | "Tab",
     event: KeyboardEvent,
@@ -951,12 +955,26 @@ function ComposerCommandKeyPlugin(props: {
       (event) => handleCommand("Tab", event),
       COMMAND_PRIORITY_HIGH,
     );
+    const unregisterPickerNavigation = editor.registerCommand(
+      KEY_DOWN_COMMAND,
+      (event) => {
+        const direction = pickerNavigationDirectionFromCommand(
+          resolveShortcutCommand(event, props.keybindings, {
+            context: { pickerOpen: true },
+          }),
+        );
+        if (!direction) return false;
+        return handleCommand(direction === "next" ? "ArrowDown" : "ArrowUp", event);
+      },
+      COMMAND_PRIORITY_HIGH,
+    );
 
     return () => {
       unregisterArrowDown();
       unregisterArrowUp();
       unregisterEnter();
       unregisterTab();
+      unregisterPickerNavigation();
     };
   }, [editor, props]);
 
@@ -1533,6 +1551,7 @@ function ComposerPromptEditorInner({
   skills,
   disabled,
   placeholder,
+  keybindings = [],
   className,
   onRemoveTerminalContext,
   onChange,
@@ -1773,7 +1792,10 @@ function ComposerPromptEditorInner({
           ErrorBoundary={LexicalErrorBoundary}
         />
         <OnChangePlugin onChange={handleEditorChange} />
-        <ComposerCommandKeyPlugin {...(onCommandKeyDown ? { onCommandKeyDown } : {})} />
+        <ComposerCommandKeyPlugin
+          keybindings={keybindings}
+          {...(onCommandKeyDown ? { onCommandKeyDown } : {})}
+        />
         <ComposerSurroundSelectionPlugin terminalContexts={terminalContexts} skills={skills} />
         <ComposerHomeEndKeyPlugin />
         <ComposerInlineTokenArrowPlugin />
@@ -1794,6 +1816,7 @@ export function ComposerPromptEditor({
   skills,
   disabled,
   placeholder,
+  keybindings = [],
   className,
   onRemoveTerminalContext,
   onChange,
@@ -1832,6 +1855,7 @@ export function ComposerPromptEditor({
         skills={skills}
         disabled={disabled}
         placeholder={placeholder}
+        keybindings={keybindings}
         onRemoveTerminalContext={onRemoveTerminalContext}
         onChange={onChange}
         onPaste={onPaste}

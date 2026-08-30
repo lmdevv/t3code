@@ -1,3 +1,4 @@
+import { useAtomValue } from "@effect/atom-react";
 import { ProviderInteractionMode, RuntimeMode } from "@t3tools/contracts";
 import { memo, type ReactNode } from "react";
 import { EllipsisIcon } from "lucide-react";
@@ -10,17 +11,24 @@ import {
   MenuSeparator as MenuDivider,
   MenuTrigger,
 } from "../ui/menu";
+import { usePickerNavigationKeybindings } from "../../pickerNavigation";
+import { primaryServerKeybindingsAtom } from "../../state/server";
 
 export const CompactComposerControlsMenu = memo(function CompactComposerControlsMenu(props: {
   interactionMode: ProviderInteractionMode;
   runtimeMode: RuntimeMode;
   showInteractionModeToggle: boolean;
   traitsMenuContent?: ReactNode;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
   onToggleInteractionMode: () => void;
   onRuntimeModeChange: (mode: RuntimeMode) => void;
 }) {
+  const keybindings = useAtomValue(primaryServerKeybindingsAtom);
+  usePickerNavigationKeybindings(keybindings, { enabled: props.open === true });
+
   return (
-    <Menu>
+    <Menu open={props.open} onOpenChange={props.onOpenChange}>
       <MenuTrigger
         render={
           <Button
