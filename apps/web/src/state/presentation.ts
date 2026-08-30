@@ -8,8 +8,8 @@ import { environmentCatalog } from "../connection/catalog";
 import { serverEnvironment } from "./server";
 
 export const environmentPresentations = createEnvironmentPresentationAtoms({
-  catalogValueAtom: environmentCatalog.catalogValueAtom,
-  stateAtom: environmentCatalog.stateAtom,
+  catalogValueAtom: Atom.make((get) => get(environmentCatalog.catalogValueAtom)),
+  stateAtom: (environmentId) => environmentCatalog.stateAtom(environmentId),
   serverConfigValueAtom: serverEnvironment.configValueAtom,
 });
 
