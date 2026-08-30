@@ -5,7 +5,7 @@ alwaysApply: true
 
 # Personal fork
 
-This checkout is `lmdevv/t3code`, not upstream `pingdotgg/t3code`.
+This checkout is `lmdevv/t3code`, not upstream `pingdotgg/t3code`. Keep the whole root `AGENTS.md`. The last section (`lmdevv personal fork`) overrides it.
 
 At session start, read and follow:
 
@@ -14,4 +14,4 @@ At session start, read and follow:
 
 Do not push to `origin`. Push to `personal` (`lmdevv/t3code`) `main`.
 
-Do not tell the user the work is finished until the skill checklist is complete: full tests, unsigned desktop CI build, Tailscale launch on `dawin` with UI past loading, NUR hashes on `lmdevv/nur-packages` `main`. Overview: `docs/personal/AGENTS.md`.
+Do not tell the user the work is finished until the skill checklist is complete.
