@@ -2,7 +2,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { EnvironmentId } from "@t3tools/contracts";
 import { describe, expect, it } from "vite-plus/test";
 
-import { ComposerStashMenu } from "./ComposerStashMenu";
+import { ComposerStashMenu, nextStashHighlightId } from "./ComposerStashMenu";
 
 describe("ComposerStashMenu", () => {
   it("shows saved image thumbnails and incomplete image states", () => {
@@ -87,5 +87,22 @@ describe("ComposerStashMenu", () => {
 
     expect(markup).toContain("(2 attachments)");
     expect(markup).not.toContain("(2 files)");
+  });
+});
+
+describe("nextStashHighlightId", () => {
+  const entries = [{ id: "a" }, { id: "b" }, { id: "c" }];
+
+  it("moves to the next and previous ids and wraps", () => {
+    expect(nextStashHighlightId(entries, "a", "next")).toBe("b");
+    expect(nextStashHighlightId(entries, "c", "next")).toBe("a");
+    expect(nextStashHighlightId(entries, "b", "previous")).toBe("a");
+    expect(nextStashHighlightId(entries, "a", "previous")).toBe("c");
+  });
+
+  it("starts at the first or last entry when nothing is highlighted", () => {
+    expect(nextStashHighlightId(entries, null, "next")).toBe("a");
+    expect(nextStashHighlightId(entries, null, "previous")).toBe("c");
+    expect(nextStashHighlightId([], null, "next")).toBeNull();
   });
 });

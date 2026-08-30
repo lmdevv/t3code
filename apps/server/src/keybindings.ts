@@ -135,6 +135,14 @@ const LEGACY_DEFAULT_KEYBINDING_MIGRATIONS: ReadonlyArray<{
     },
     to: { key: "mod+alt+f", command: "projectSearch.toggle", when: "!terminalFocus" },
   },
+  {
+    from: {
+      key: "mod+shift+j",
+      command: "rightPanel.openTerminal",
+      when: "!terminalFocus",
+    },
+    to: { key: "mod+shift+j", command: "rightPanel.openTerminal" },
+  },
 ];
 
 function migrateLegacyDefaultKeybindings(config: readonly KeybindingRule[]): {
