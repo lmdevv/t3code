@@ -89,6 +89,16 @@ const DEFAULT_BINDINGS = compile([
   { shortcut: modShortcut("j"), command: "terminal.toggle" },
   { shortcut: modShortcut("b", { altKey: true }), command: "rightPanel.toggle" },
   {
+    shortcut: modShortcut("j", { shiftKey: true }),
+    command: "rightPanel.openTerminal",
+    whenAst: whenNot(whenIdentifier("terminalFocus")),
+  },
+  {
+    shortcut: modShortcut("f", { shiftKey: true }),
+    command: "rightPanel.openFiles",
+    whenAst: whenNot(whenIdentifier("terminalFocus")),
+  },
+  {
     shortcut: modShortcut("d"),
     command: "terminal.split",
     whenAst: whenIdentifier("terminalFocus"),
@@ -124,7 +134,7 @@ const DEFAULT_BINDINGS = compile([
     whenAst: whenNot(whenIdentifier("terminalFocus")),
   },
   {
-    shortcut: modShortcut("f", { shiftKey: true }),
+    shortcut: modShortcut("f", { altKey: true }),
     command: "projectSearch.toggle",
     whenAst: whenNot(whenIdentifier("terminalFocus")),
   },
@@ -135,6 +145,11 @@ const DEFAULT_BINDINGS = compile([
   {
     shortcut: modShortcut("m", { shiftKey: true }),
     command: "modelPicker.toggle",
+    whenAst: whenNot(whenIdentifier("terminalFocus")),
+  },
+  {
+    shortcut: modShortcut(",", { shiftKey: true }),
+    command: "modelOptionsPicker.toggle",
     whenAst: whenNot(whenIdentifier("terminalFocus")),
   },
   { shortcut: modShortcut("o", { shiftKey: true }), command: "chat.new" },
@@ -164,6 +179,30 @@ const DEFAULT_BINDINGS = compile([
     shortcut: modShortcut("3"),
     command: "modelPicker.jump.3",
     whenAst: whenIdentifier("modelPickerOpen"),
+  },
+  {
+    shortcut: {
+      key: "p",
+      metaKey: false,
+      ctrlKey: true,
+      shiftKey: false,
+      altKey: false,
+      modKey: false,
+    },
+    command: "picker.previous",
+    whenAst: whenIdentifier("pickerOpen"),
+  },
+  {
+    shortcut: {
+      key: "n",
+      metaKey: false,
+      ctrlKey: true,
+      shiftKey: false,
+      altKey: false,
+      modKey: false,
+    },
+    command: "picker.next",
+    whenAst: whenIdentifier("pickerOpen"),
   },
 ]);
 
@@ -373,7 +412,7 @@ describe("shortcutLabelForCommand", () => {
     );
     assert.strictEqual(
       shortcutLabelForCommand(DEFAULT_BINDINGS, "projectSearch.toggle", "MacIntel"),
-      "⇧⌘F",
+      "⌥⌘F",
     );
     assert.strictEqual(
       shortcutLabelForCommand(DEFAULT_BINDINGS, "modelPicker.toggle", "Linux"),
@@ -596,14 +635,14 @@ describe("chat/editor shortcuts", () => {
 
   it("matches projectSearch.toggle shortcut outside terminal focus", () => {
     assert.strictEqual(
-      resolveShortcutCommand(event({ key: "f", metaKey: true, shiftKey: true }), DEFAULT_BINDINGS, {
+      resolveShortcutCommand(event({ key: "f", metaKey: true, altKey: true }), DEFAULT_BINDINGS, {
         platform: "MacIntel",
         context: { terminalFocus: false },
       }),
       "projectSearch.toggle",
     );
     assert.notStrictEqual(
-      resolveShortcutCommand(event({ key: "f", metaKey: true, shiftKey: true }), DEFAULT_BINDINGS, {
+      resolveShortcutCommand(event({ key: "f", metaKey: true, altKey: true }), DEFAULT_BINDINGS, {
         platform: "MacIntel",
         context: { terminalFocus: true },
       }),
@@ -709,6 +748,41 @@ describe("cross-command precedence", () => {
 });
 
 describe("resolveShortcutCommand", () => {
+  it("scopes Ctrl+N/P picker navigation without shadowing Linux mod shortcuts", () => {
+    assert.strictEqual(
+      resolveShortcutCommand(event({ key: "p", ctrlKey: true }), DEFAULT_BINDINGS, {
+        platform: "Linux",
+        context: { pickerOpen: true, terminalFocus: false },
+      }),
+      "picker.previous",
+    );
+    assert.strictEqual(
+      resolveShortcutCommand(event({ key: "n", ctrlKey: true }), DEFAULT_BINDINGS, {
+        platform: "Linux",
+        context: { pickerOpen: true, terminalFocus: false },
+      }),
+      "picker.next",
+    );
+    assert.strictEqual(
+      resolveShortcutCommand(event({ key: "p", ctrlKey: true }), DEFAULT_BINDINGS, {
+        platform: "Linux",
+        context: { pickerOpen: false, terminalFocus: false },
+      }),
+      "filePicker.toggle",
+    );
+  });
+
+  it("matches Cmd+Shift+Comma by physical key when macOS reports less-than", () => {
+    assert.strictEqual(
+      resolveShortcutCommand(
+        event({ key: "<", code: "Comma", metaKey: true, shiftKey: true }),
+        DEFAULT_BINDINGS,
+        { platform: "MacIntel", context: { terminalFocus: false } },
+      ),
+      "modelOptionsPicker.toggle",
+    );
+  });
+
   it("returns dynamic script commands", () => {
     const keybindings = compile([{ shortcut: modShortcut("r"), command: "script.setup.run" }]);
 

@@ -38,8 +38,23 @@ Commands are IDs like `terminal.toggle`, `commandPalette.toggle`, `preview.refre
 `chat.new`. Project scripts are addressable as `script.{id}.run`, for example `script.test.run`.
 
 `filePicker.toggle` opens file search for the active project and defaults to `mod+p`.
-`projectSearch.toggle` searches inside the active project's files and defaults to `mod+shift+f`.
+`projectSearch.toggle` searches inside the active project's files and defaults to `mod+alt+f`.
 Repeating either shortcut closes that search, and switching shortcuts replaces the open search.
+
+Picker lists support `picker.previous` and `picker.next`, which default to `ctrl+p` and `ctrl+n`.
+These commands are active only while a supported picker is open. They cover the command palette,
+file and project search, model and model-options pickers, composer file/skill/slash suggestions,
+and the right-panel launcher.
+
+`modelPicker.toggle` opens the model picker and defaults to `mod+shift+m`.
+`modelOptionsPicker.toggle` opens the current model's reasoning and other provider options and
+defaults to `mod+shift+,`.
+
+The right-panel commands open or activate their surfaces instead of creating duplicate tabs:
+`rightPanel.openTerminal` defaults to `mod+shift+j`, `rightPanel.openFiles` to `mod+shift+f`,
+`rightPanel.openPullRequest` to `mod+alt+r`, and `rightPanel.openAgents` to `mod+shift+a`.
+The existing browser preview command, `preview.toggle`, defaults to `mod+shift+b`. The terminal
+drawer remains `terminal.toggle` on `mod+j`, and the diff remains `diff.toggle` on `mod+d`.
 `themeEditor.toggle` opens or closes the floating theme editor and defaults to
 `mod+alt+shift+t`. Select a color label to spotlight the elements that use it; select the label
 again to clear the spotlight. The swatch and hex field keep that color selected while you edit it.
@@ -81,9 +96,9 @@ but the new thread does not reuse the worktree created for the thread that just 
 ## `when` Conditions
 
 A `when` expression is evaluated against context keys describing the current UI state. The keys
-the app supplies today are `terminalFocus`, `terminalOpen`, `previewFocus`, `previewOpen`, and
-`modelPickerOpen`. The set is open and grows over time, so treat that as the current list rather
-than a fixed one. Any key the running app does not supply evaluates to `false`.
+the app supplies today are `terminalFocus`, `terminalOpen`, `previewFocus`, `previewOpen`,
+`modelPickerOpen`, and `pickerOpen`. The set is open and grows over time, so treat that as the
+current list rather than a fixed one. Any key the running app does not supply evaluates to `false`.
 
 Operators: `!` (not), `&&` (and), `||` (or), and parentheses.
 
