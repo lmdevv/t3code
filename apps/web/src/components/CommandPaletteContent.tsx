@@ -1,5 +1,9 @@
+import { useAtomValue } from "@effect/atom-react";
 import { ArrowDownIcon, ArrowUpIcon } from "lucide-react";
 import { type ComponentProps, type ReactNode, useLayoutEffect, useRef } from "react";
+
+import { usePickerNavigationKeybindings } from "~/pickerNavigation";
+import { primaryServerKeybindingsAtom } from "~/state/server";
 
 import { Command, CommandFooter, CommandInput, CommandPanel } from "./ui/command";
 import { Kbd, KbdGroup } from "./ui/kbd";
@@ -34,6 +38,8 @@ export function CommandPaletteContent({
   ...commandProps
 }: CommandPaletteContentProps) {
   const inputRef = useRef<HTMLInputElement>(null);
+  const keybindings = useAtomValue(primaryServerKeybindingsAtom);
+  usePickerNavigationKeybindings(keybindings);
 
   // Direct-open flows replace the initial palette view after the dialog has
   // already moved focus. Reclaim it when the replacement input mounts so

@@ -5918,6 +5918,16 @@ export default function ChatView(props: ChatViewProps) {
     useRightPanelStore.getState().openPullRequest(activeThreadRef, linkedThreadPullRequest);
   }, [activeThreadRef, linkedThreadPullRequest, supportsPullRequests]);
   const pullRequestSurfaceAvailable = supportsPullRequests && linkedThreadPullRequest !== null;
+  const openRightPanelTerminal = useCallback(() => {
+    if (!activeThreadRef) return;
+    const existing = rightPanelState.surfaces.find((surface) => surface.kind === "terminal");
+    if (!existing) {
+      addTerminalSurface();
+      return;
+    }
+    useRightPanelStore.getState().activateSurface(activeThreadRef, existing.id);
+    setTerminalFocusRequestId((value) => value + 1);
+  }, [activeThreadRef, addTerminalSurface, rightPanelState.surfaces]);
   const supportsSettlement = serverConfig?.environment.capabilities.threadSettlement === true;
   const supportsSnooze = serverConfig?.environment.capabilities.threadSnooze === true;
   const supportsPinning = serverConfig?.environment.capabilities.threadPinning === true;
@@ -6689,6 +6699,34 @@ export default function ChatView(props: ChatViewProps) {
         return;
       }
 
+      if (command === "rightPanel.openTerminal") {
+        event.preventDefault();
+        event.stopPropagation();
+        openRightPanelTerminal();
+        return;
+      }
+
+      if (command === "rightPanel.openFiles") {
+        event.preventDefault();
+        event.stopPropagation();
+        addFilesSurface();
+        return;
+      }
+
+      if (command === "rightPanel.openPullRequest") {
+        event.preventDefault();
+        event.stopPropagation();
+        addPullRequestSurface();
+        return;
+      }
+
+      if (command === "rightPanel.openAgents") {
+        event.preventDefault();
+        event.stopPropagation();
+        addAgentsSurface();
+        return;
+      }
+
       if (command === "terminal.split") {
         event.preventDefault();
         event.stopPropagation();
@@ -6804,6 +6842,13 @@ export default function ChatView(props: ChatViewProps) {
         return;
       }
 
+      if (command === "modelOptionsPicker.toggle") {
+        event.preventDefault();
+        event.stopPropagation();
+        composerRef.current?.toggleModelOptionsPicker();
+        return;
+      }
+
       const scriptId = projectScriptIdFromCommand(command);
       if (!scriptId || !activeProject) return;
       const script = activeProjectScripts.find((entry) => entry.id === scriptId);
@@ -6818,6 +6863,9 @@ export default function ChatView(props: ChatViewProps) {
     activeProject,
     activeRightPanelSurface,
     activeProjectScripts,
+    addAgentsSurface,
+    addFilesSurface,
+    addPullRequestSurface,
     addTerminalSurface,
     activeThreadRef,
     activeThreadPinned,
@@ -6840,6 +6888,7 @@ export default function ChatView(props: ChatViewProps) {
     isServerThread,
     onInterrupt,
     onToggleDiff,
+    openRightPanelTerminal,
     pinThread,
     settleThread,
     supportsPinning,
@@ -9873,6 +9922,7 @@ export default function ChatView(props: ChatViewProps) {
           mode="inline"
           widthStorageKey={`t3code:preview-panel-width:${activeThreadKey}`}
           open={rightPanelOpen}
+          keybindings={keybindings}
           maximized={rightPanelMaximized}
           surfaces={renderedRightPanelSurfaces}
           environmentId={activeThreadRef.environmentId}
@@ -9923,6 +9973,7 @@ export default function ChatView(props: ChatViewProps) {
         >
           <RightPanelTabs
             mode="sheet"
+            keybindings={keybindings}
             // Same effective inset as the closed-state titlebar controls
             // (pr-3 in the tab bar plus this pixel equals the absolute
             // right inset plus mr-px), so the cluster does not creep when
