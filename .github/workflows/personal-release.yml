@@ -36,7 +36,6 @@ jobs:
         with:
           ref: main
           fetch-depth: 0
-          persist-credentials: false
 
       - id: rebase
         name: Rebase patch stack
@@ -80,6 +79,14 @@ jobs:
             echo "OPENAI_API_KEY is required to resolve an automatic rebase conflict." >&2
             exit 1
           fi
+
+      - name: Remove checkout credentials before Codex
+        if: steps.rebase.outputs.result == 'conflict'
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config --local --unset-regexp '^includeIf\.gitdir:' || true
+          git config --local --unset-all http.https://github.com/.extraheader || true
 
       - name: Resolve rebase conflict with Codex
         if: steps.rebase.outputs.result == 'conflict'
