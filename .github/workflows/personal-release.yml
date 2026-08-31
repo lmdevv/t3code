@@ -2,7 +2,9 @@ name: Personal nightly release
 
 on:
   schedule:
-    - cron: "17 4 * * *"
+    # GitHub cron schedules use UTC. Run at midnight, middle of night, morning,
+    # midday, and afternoon without using minute zero, which GitHub can delay.
+    - cron: "17 0,4,8,12,16 * * *"
   workflow_dispatch:
     inputs:
       force:
@@ -22,6 +24,7 @@ jobs:
   sync:
     name: Rebase onto upstream main
     runs-on: ubuntu-24.04
+    timeout-minutes: 35
     outputs:
       ref: ${{ steps.release.outputs.ref }}
       should_release: ${{ steps.release.outputs.should_release }}
@@ -33,21 +36,134 @@ jobs:
         with:
           ref: main
           fetch-depth: 0
+          persist-credentials: false
 
-      - name: Rebase patch stack
+      - id: rebase
+        name: Rebase patch stack
         shell: bash
         run: |
           set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config core.hooksPath /dev/null
           git remote add upstream https://github.com/pingdotgg/t3code.git
           git fetch upstream main --tags --force
           origin_sha="$(git rev-parse HEAD)"
+          echo "origin_sha=$origin_sha" >> "$GITHUB_OUTPUT"
+
+          set +e
           git rebase upstream/main
-          rebased_sha="$(git rev-parse HEAD)"
-          if [[ "$rebased_sha" != "$origin_sha" ]]; then
-            git push --force-with-lease="refs/heads/main:$origin_sha" origin HEAD:main
+          rebase_status=$?
+          set -e
+
+          if [[ "$rebase_status" -eq 0 ]]; then
+            echo "result=clean" >> "$GITHUB_OUTPUT"
+            exit 0
           fi
+
+          if [[ -n "$(git diff --name-only --diff-filter=U)" ]]; then
+            echo "result=conflict" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "result=error" >> "$GITHUB_OUTPUT"
+          exit "$rebase_status"
+
+      - name: Require Codex fallback secret
+        if: steps.rebase.outputs.result == 'conflict'
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -z "$OPENAI_API_KEY" ]]; then
+            echo "OPENAI_API_KEY is required to resolve an automatic rebase conflict." >&2
+            exit 1
+          fi
+
+      - name: Resolve rebase conflict with Codex
+        if: steps.rebase.outputs.result == 'conflict'
+        uses: openai/codex-action@f367b1e9572fd064ea71ef925ca24ee0f01080af # v1
+        with:
+          openai-api-key: ${{ secrets.OPENAI_API_KEY }}
+          permission-profile: ":workspace"
+          safety-strategy: drop-sudo
+          allow-bot-users: github-actions[bot]
+          prompt: |
+            You are the conflict resolver for a trusted automated rebase of lmdevv/t3code.
+
+            The checkout is already in an active Git rebase from the personal fork's main
+            branch onto the official upstream main branch. Finish this rebase in the current
+            checkout while preserving the intended functionality from both sides.
+
+            Start by inspecting:
+              git status --short
+              git diff --name-only --diff-filter=U
+              git diff --cc
+              git rebase --show-current-patch
+
+            Resolve every current conflict deliberately. Keep upstream's current architecture,
+            behavior, accessibility, and styling, then port the personal fork's Vim-style picker
+            and navigation behavior into that current implementation. In particular, do not
+            replace a newer upstream component with an older fork-wide rewrite just because the
+            two versions overlap.
+
+            Rules:
+            - Do not use git rebase --abort, git rebase --skip, git reset --hard, or blanket
+              checkout/accept-ours/accept-theirs/accept-both conflict resolution.
+            - Resolve only files reported as unmerged. Do not change workflow files, auth,
+              secrets, lockfiles, or unrelated files.
+            - Do not push, fetch, access the network, or create a separate commit outside the
+              active rebase. The surrounding workflow owns the push after validation.
+            - After resolving each conflict, stage it and continue with
+              GIT_EDITOR=true git rebase --continue until the rebase is complete.
+            - Before finishing, run git diff --check and git status --short. Leave no conflict
+              markers, no untracked files, and no active rebase. If you cannot resolve safely,
+              leave the rebase unresolved and explain why rather than guessing.
+
+      - name: Validate completed Codex rebase
+        if: steps.rebase.outputs.result == 'conflict'
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git rebase --show-current-patch >/dev/null 2>&1; then
+            echo "Codex did not complete the active rebase." >&2
+            exit 1
+          fi
+          if [[ -n "$(git diff --name-only --diff-filter=U)" ]]; then
+            echo "Codex left unmerged files." >&2
+            git diff --name-only --diff-filter=U >&2
+            exit 1
+          fi
+          git diff --check
+          if [[ -n "$(git status --porcelain)" ]]; then
+            echo "Codex left a dirty worktree." >&2
+            git status --short >&2
+            exit 1
+          fi
+
+      - name: Push rebased personal main
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          ORIGIN_SHA: ${{ steps.rebase.outputs.origin_sha }}
+        run: |
+          set -euo pipefail
+          rebased_sha="$(git rev-parse HEAD)"
+          if [[ "$rebased_sha" == "$ORIGIN_SHA" ]]; then
+            echo "Personal main is already based on upstream main."
+            exit 0
+          fi
+
+          cleanup_credentials() {
+            git config --local --unset credential.helper >/dev/null 2>&1 || true
+          }
+          trap cleanup_credentials EXIT
+          # The helper is evaluated by Git later, so this variable must remain
+          # literal until the credential helper process runs.
+          # shellcheck disable=SC2016
+          git config --local credential.helper '!f() { echo username=x-access-token; echo password="$GITHUB_TOKEN"; }; f'
+          git push --force-with-lease="refs/heads/main:$ORIGIN_SHA" origin HEAD:main
 
       - id: release
         name: Resolve release metadata
