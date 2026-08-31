@@ -1,14 +1,14 @@
-name: Personal nightly release
+name: Personal upstream sync and release
 
 on:
   schedule:
-    # GitHub cron schedules use UTC. Run at midnight, middle of night, morning,
-    # midday, and afternoon without using minute zero, which GitHub can delay.
+    # GitHub cron schedules use UTC. Run five times daily without using minute
+    # zero, which GitHub can delay.
     - cron: "17 0,4,8,12,16 * * *"
   workflow_dispatch:
     inputs:
       force:
-        description: Rebuild even when the current commit already has a personal release
+        description: Rebuild even when there are no new upstream commits
         required: false
         default: false
         type: boolean
@@ -19,17 +19,23 @@ concurrency:
 
 permissions:
   contents: write
+  issues: write
+  pull-requests: write
 
 jobs:
   sync:
-    name: Rebase onto upstream main
+    name: Prepare upstream sync candidate
     runs-on: ubuntu-24.04
     timeout-minutes: 35
     outputs:
+      candidate_branch: ${{ steps.rebase.outputs.candidate_branch }}
+      candidate_ref: ${{ steps.rebase.outputs.candidate_ref }}
+      main_sha: ${{ steps.rebase.outputs.main_sha }}
       ref: ${{ steps.release.outputs.ref }}
       should_release: ${{ steps.release.outputs.should_release }}
       tag: ${{ steps.release.outputs.tag }}
       version: ${{ steps.release.outputs.version }}
+      upstream_sha: ${{ steps.rebase.outputs.upstream_sha }}
     steps:
       - name: Checkout personal main
         uses: actions/checkout@v6
@@ -38,7 +44,9 @@ jobs:
           fetch-depth: 0
 
       - id: rebase
-        name: Rebase patch stack
+        name: Rebase patch stack onto official upstream
+        env:
+          GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           set -euo pipefail
@@ -47,8 +55,41 @@ jobs:
           git config core.hooksPath /dev/null
           git remote add upstream https://github.com/pingdotgg/t3code.git
           git fetch upstream main --tags --force
-          origin_sha="$(git rev-parse HEAD)"
-          echo "origin_sha=$origin_sha" >> "$GITHUB_OUTPUT"
+          main_sha="$(git rev-parse HEAD)"
+          upstream_sha="$(git rev-parse upstream/main)"
+          candidate_branch="automation/upstream-sync-${upstream_sha:0:12}"
+
+          {
+            echo "main_sha=$main_sha"
+            echo "upstream_sha=$upstream_sha"
+            echo "candidate_branch=$candidate_branch"
+          } >> "$GITHUB_OUTPUT"
+
+          if git merge-base --is-ancestor "$upstream_sha" "$main_sha"; then
+            {
+              echo "result=up-to-date"
+              echo "candidate_ref=$main_sha"
+              echo "candidate_branch=main"
+            } >> "$GITHUB_OUTPUT"
+            echo "Personal main already contains upstream main at $upstream_sha."
+            exit 0
+          fi
+
+          existing_pr="$(gh pr list \
+            --repo "$GITHUB_REPOSITORY" \
+            --state open \
+            --base main \
+            --head "$candidate_branch" \
+            --json number,url \
+            --jq '.[0] | if . then "\(.number)\t\(.url)" else empty end' || true)"
+          if [[ -n "$existing_pr" ]]; then
+            echo "An open sync PR already exists for upstream $upstream_sha: $existing_pr"
+            {
+              echo "result=pending"
+              echo "candidate_ref=$main_sha"
+            } >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
 
           set +e
           git rebase upstream/main
@@ -56,112 +97,43 @@ jobs:
           set -e
 
           if [[ "$rebase_status" -eq 0 ]]; then
-            echo "result=clean" >> "$GITHUB_OUTPUT"
+            git diff --check
+            candidate_sha="$(git rev-parse HEAD)"
+            {
+              echo "result=candidate"
+              echo "candidate_ref=$candidate_sha"
+            } >> "$GITHUB_OUTPUT"
+            echo "Prepared candidate $candidate_sha on $candidate_branch."
             exit 0
           fi
 
           if [[ -n "$(git diff --name-only --diff-filter=U)" ]]; then
-            echo "result=conflict" >> "$GITHUB_OUTPUT"
+            conflict_files="$(git diff --name-only --diff-filter=U)"
+            delimiter="CONFLICT_FILES_${GITHUB_RUN_ID}"
+            {
+              echo "result=conflict"
+              echo "candidate_ref=$upstream_sha"
+              echo "conflict_files<<$delimiter"
+              printf '%s\n' "$conflict_files"
+              echo "$delimiter"
+            } >> "$GITHUB_OUTPUT"
+            git rebase --abort
+            git checkout --quiet --detach "$upstream_sha"
+            echo "Prepared upstream snapshot $upstream_sha for a conflict PR."
             exit 0
           fi
 
           echo "result=error" >> "$GITHUB_OUTPUT"
           exit "$rebase_status"
 
-      - name: Require Codex fallback secret
-        if: steps.rebase.outputs.result == 'conflict'
-        env:
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          if [[ -z "$OPENAI_API_KEY" ]]; then
-            echo "OPENAI_API_KEY is required to resolve an automatic rebase conflict." >&2
-            exit 1
-          fi
-
-      - name: Remove checkout credentials before Codex
-        if: steps.rebase.outputs.result == 'conflict'
-        shell: bash
-        run: |
-          set -euo pipefail
-          git config --local --unset-regexp '^includeIf\.gitdir:' || true
-          git config --local --unset-all http.https://github.com/.extraheader || true
-
-      - name: Resolve rebase conflict with Codex
-        if: steps.rebase.outputs.result == 'conflict'
-        uses: openai/codex-action@f367b1e9572fd064ea71ef925ca24ee0f01080af # v1
-        with:
-          openai-api-key: ${{ secrets.OPENAI_API_KEY }}
-          permission-profile: ":workspace"
-          safety-strategy: drop-sudo
-          allow-bot-users: github-actions[bot]
-          prompt: |
-            You are the conflict resolver for a trusted automated rebase of lmdevv/t3code.
-
-            The checkout is already in an active Git rebase from the personal fork's main
-            branch onto the official upstream main branch. Finish this rebase in the current
-            checkout while preserving the intended functionality from both sides.
-
-            Start by inspecting:
-              git status --short
-              git diff --name-only --diff-filter=U
-              git diff --cc
-              git rebase --show-current-patch
-
-            Resolve every current conflict deliberately. Keep upstream's current architecture,
-            behavior, accessibility, and styling, then port the personal fork's Vim-style picker
-            and navigation behavior into that current implementation. In particular, do not
-            replace a newer upstream component with an older fork-wide rewrite just because the
-            two versions overlap.
-
-            Rules:
-            - Do not use git rebase --abort, git rebase --skip, git reset --hard, or blanket
-              checkout/accept-ours/accept-theirs/accept-both conflict resolution.
-            - Resolve only files reported as unmerged. Do not change workflow files, auth,
-              secrets, lockfiles, or unrelated files.
-            - Do not push, fetch, access the network, or create a separate commit outside the
-              active rebase. The surrounding workflow owns the push after validation.
-            - After resolving each conflict, stage it and continue with
-              GIT_EDITOR=true git rebase --continue until the rebase is complete.
-            - Before finishing, run git diff --check and git status --short. Leave no conflict
-              markers, no untracked files, and no active rebase. If you cannot resolve safely,
-              leave the rebase unresolved and explain why rather than guessing.
-
-      - name: Validate completed Codex rebase
-        if: steps.rebase.outputs.result == 'conflict'
-        shell: bash
-        run: |
-          set -euo pipefail
-          if git rebase --show-current-patch >/dev/null 2>&1; then
-            echo "Codex did not complete the active rebase." >&2
-            exit 1
-          fi
-          if [[ -n "$(git diff --name-only --diff-filter=U)" ]]; then
-            echo "Codex left unmerged files." >&2
-            git diff --name-only --diff-filter=U >&2
-            exit 1
-          fi
-          git diff --check
-          if [[ -n "$(git status --porcelain)" ]]; then
-            echo "Codex left a dirty worktree." >&2
-            git status --short >&2
-            exit 1
-          fi
-
-      - name: Push rebased personal main
-        shell: bash
+      - name: Publish candidate branch
+        if: steps.rebase.outputs.result == 'candidate' || steps.rebase.outputs.result == 'conflict'
         env:
           GITHUB_TOKEN: ${{ github.token }}
-          ORIGIN_SHA: ${{ steps.rebase.outputs.origin_sha }}
+          CANDIDATE_BRANCH: ${{ steps.rebase.outputs.candidate_branch }}
+        shell: bash
         run: |
           set -euo pipefail
-          rebased_sha="$(git rev-parse HEAD)"
-          if [[ "$rebased_sha" == "$ORIGIN_SHA" ]]; then
-            echo "Personal main is already based on upstream main."
-            exit 0
-          fi
-
           cleanup_credentials() {
             git config --local --unset credential.helper >/dev/null 2>&1 || true
           }
@@ -170,16 +142,69 @@ jobs:
           # literal until the credential helper process runs.
           # shellcheck disable=SC2016
           git config --local credential.helper '!f() { echo username=x-access-token; echo password="$GITHUB_TOKEN"; }; f'
-          git push --force-with-lease="refs/heads/main:$ORIGIN_SHA" origin HEAD:main
+          git push --force "origin" "HEAD:$CANDIDATE_BRANCH"
 
-      - id: release
-        name: Resolve release metadata
+      - name: Create or update conflict PR
+        if: steps.rebase.outputs.result == 'conflict'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CANDIDATE_BRANCH: ${{ steps.rebase.outputs.candidate_branch }}
+          MAIN_SHA: ${{ steps.rebase.outputs.main_sha }}
+          UPSTREAM_SHA: ${{ steps.rebase.outputs.upstream_sha }}
+          CONFLICT_FILES: ${{ steps.rebase.outputs.conflict_files }}
+        shell: bash
+        run: |
+          # shellcheck disable=SC2016
+          set -euo pipefail
+          title="chore(sync): resolve upstream rebase conflicts"
+          body="$(cat <<EOF
+          ## Automated upstream sync needs conflict resolution
+
+          The scheduled sync could not rebase personal \`main\` onto the official
+          \`pingdotgg/t3code/main\` without conflicts.
+
+          - Personal main before sync: \`$MAIN_SHA\`
+          - Official upstream: \`$UPSTREAM_SHA\`
+          - Candidate branch: \`$CANDIDATE_BRANCH\`
+
+          Conflicting paths:
+          $(printf '%s\n' "$CONFLICT_FILES" | sed 's/^/- /')
+
+          @codex Please resolve this PR as you see fit while preserving the
+          functionality of both sides. Keep the current upstream architecture,
+          accessibility, and styling, and port the personal Vim-style picker and
+          navigation behavior into it. Run the focused tests and leave the branch
+          with no conflict markers. Do not modify workflow authentication or
+          unrelated files.
+
+          This PR is intentionally based on the upstream snapshot so GitHub can
+          display the conflict against personal \`main\`. It must be reviewed and
+          merged only after the normal checks pass.
+          EOF
+          )"
+          existing_pr="$(gh pr list --repo "$GITHUB_REPOSITORY" --state open --base main --head "$CANDIDATE_BRANCH" --json number,url --jq '.[0] | if . then "\(.number)\t\(.url)" else empty end' || true)"
+          if [[ -n "$existing_pr" ]]; then
+            pr_number="${existing_pr%%$'\t'*}"
+            gh pr comment "$pr_number" --repo "$GITHUB_REPOSITORY" --body "$body"
+            echo "Updated existing conflict PR $existing_pr."
+          else
+            gh pr create \
+              --repo "$GITHUB_REPOSITORY" \
+              --base main \
+              --head "$CANDIDATE_BRANCH" \
+              --title "$title" \
+              --body "$body"
+          fi
+
+      - name: Resolve release metadata
+        if: steps.rebase.outputs.result != 'conflict' && steps.rebase.outputs.result != 'pending'
+        id: release
         shell: bash
         env:
           FORCE_RELEASE: ${{ inputs.force || false }}
         run: |
           set -euo pipefail
-          ref="$(git rev-parse HEAD)"
+          ref="${{ steps.rebase.outputs.candidate_ref }}"
           current_version="$(node -p "require('./apps/desktop/package.json').version")"
           stable_version="${current_version%%-*}"
           IFS=. read -r major minor patch <<< "$stable_version"
@@ -202,6 +227,100 @@ jobs:
             echo "tag=$tag"
             echo "version=$version"
           } >> "$GITHUB_OUTPUT"
+
+  promote:
+    name: Promote verified candidate to personal main
+    needs: [sync, verify, build]
+    if: needs.sync.outputs.should_release == 'true' && needs.verify.result == 'success' && needs.build.result == 'success'
+    runs-on: ubuntu-24.04
+    outputs:
+      ref: ${{ steps.promote.outputs.ref }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.sync.outputs.ref }}
+          fetch-depth: 0
+      - id: promote
+        name: Fast-forward personal main to verified candidate
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          EXPECTED_MAIN_SHA: ${{ needs.sync.outputs.main_sha }}
+          SHOULD_UPDATE: ${{ needs.sync.outputs.candidate_branch != '' && needs.sync.outputs.candidate_branch != 'main' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          candidate_sha="$(git rev-parse HEAD)"
+          if [[ "$SHOULD_UPDATE" == "true" ]]; then
+            cleanup_credentials() {
+              git config --local --unset credential.helper >/dev/null 2>&1 || true
+            }
+            trap cleanup_credentials EXIT
+            # The helper is evaluated by Git later, so this variable must remain
+            # literal until the credential helper process runs.
+            # shellcheck disable=SC2016
+            git config --local credential.helper '!f() { echo username=x-access-token; echo password="$GITHUB_TOKEN"; }; f'
+            git push --force-with-lease="refs/heads/main:$EXPECTED_MAIN_SHA" origin HEAD:main
+          else
+            echo "Force release requested for the existing personal main commit."
+          fi
+          echo "ref=$candidate_sha" >> "$GITHUB_OUTPUT"
+
+  failure-pr:
+    name: Open PR for failed upstream sync
+    needs: [sync, verify, build, promote]
+    if: >-
+      always() &&
+      needs.sync.result == 'success' &&
+      needs.sync.outputs.candidate_branch != '' &&
+      (needs.verify.result == 'failure' || needs.build.result == 'failure' || needs.promote.result == 'failure')
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Create or update failure PR
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CANDIDATE_BRANCH: ${{ needs.sync.outputs.candidate_branch }}
+          MAIN_SHA: ${{ needs.sync.outputs.main_sha }}
+          UPSTREAM_SHA: ${{ needs.sync.outputs.upstream_sha }}
+          VERIFY_RESULT: ${{ needs.verify.result }}
+          BUILD_RESULT: ${{ needs.build.result }}
+          PROMOTE_RESULT: ${{ needs.promote.result }}
+        shell: bash
+        run: |
+          # shellcheck disable=SC2016
+          set -euo pipefail
+          title="chore(sync): fix failed upstream update"
+          body="$(cat <<EOF
+          ## Automated upstream sync failed validation
+
+          The rebased candidate was not promoted to personal \`main\` because a
+          downstream job failed.
+
+          - Personal main before sync: \`$MAIN_SHA\`
+          - Official upstream: \`$UPSTREAM_SHA\`
+          - Candidate branch: \`$CANDIDATE_BRANCH\`
+          - Verify job: \`$VERIFY_RESULT\`
+          - Build job: \`$BUILD_RESULT\`
+          - Promote job: \`$PROMOTE_RESULT\`
+
+          @codex Please inspect the failed checks, fix the underlying issue while
+          preserving both upstream and personal fork functionality, run the
+          relevant tests, and push the fix to this branch. Do not modify workflow
+          authentication or unrelated files.
+          EOF
+          )"
+          existing_pr="$(gh pr list --repo "$GITHUB_REPOSITORY" --state open --base main --head "$CANDIDATE_BRANCH" --json number,url --jq '.[0] | if . then "\(.number)\t\(.url)" else empty end' || true)"
+          if [[ -n "$existing_pr" ]]; then
+            pr_number="${existing_pr%%$'\t'*}"
+            gh pr comment "$pr_number" --repo "$GITHUB_REPOSITORY" --body "$body"
+            echo "Updated existing failure PR $existing_pr."
+          else
+            gh pr create \
+              --repo "$GITHUB_REPOSITORY" \
+              --base main \
+              --head "$CANDIDATE_BRANCH" \
+              --title "$title" \
+              --body "$body"
+          fi
 
   verify:
     name: Verify personal patches
