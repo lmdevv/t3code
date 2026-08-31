@@ -142,7 +142,7 @@ jobs:
           # literal until the credential helper process runs.
           # shellcheck disable=SC2016
           git config --local credential.helper '!f() { echo username=x-access-token; echo password="$GITHUB_TOKEN"; }; f'
-          git push --force "origin" "HEAD:$CANDIDATE_BRANCH"
+          git push --force "origin" "HEAD:refs/heads/$CANDIDATE_BRANCH"
 
       - name: Create or update conflict PR
         if: steps.rebase.outputs.result == 'conflict'
