@@ -148,6 +148,7 @@ jobs:
         if: steps.rebase.outputs.result == 'conflict'
         env:
           GH_TOKEN: ${{ github.token }}
+          CODEX_TRIGGER_TOKEN: ${{ secrets.CODEX_TRIGGER_TOKEN }}
           CANDIDATE_BRANCH: ${{ steps.rebase.outputs.candidate_branch }}
           MAIN_SHA: ${{ steps.rebase.outputs.main_sha }}
           UPSTREAM_SHA: ${{ steps.rebase.outputs.upstream_sha }}
@@ -170,13 +171,6 @@ jobs:
           Conflicting paths:
           $(printf '%s\n' "$CONFLICT_FILES" | sed 's/^/- /')
 
-          @codex Please resolve this PR as you see fit while preserving the
-          functionality of both sides. Keep the current upstream architecture,
-          accessibility, and styling, and port the personal Vim-style picker and
-          navigation behavior into it. Run the focused tests and leave the branch
-          with no conflict markers. Do not modify workflow authentication or
-          unrelated files.
-
           This PR is intentionally based on the upstream snapshot so GitHub can
           display the conflict against personal \`main\`. It must be reviewed and
           merged only after the normal checks pass.
@@ -188,13 +182,52 @@ jobs:
             gh pr comment "$pr_number" --repo "$GITHUB_REPOSITORY" --body "$body"
             echo "Updated existing conflict PR $existing_pr."
           else
-            gh pr create \
+            pr_url="$(gh pr create \
               --repo "$GITHUB_REPOSITORY" \
               --base main \
               --head "$CANDIDATE_BRANCH" \
               --title "$title" \
-              --body "$body"
+              --body "$body")"
+            pr_number="${pr_url##*/}"
           fi
+
+          if [[ -z "$CODEX_TRIGGER_TOKEN" ]]; then
+            echo "Missing required Actions secret CODEX_TRIGGER_TOKEN." >&2
+            exit 1
+          fi
+          trigger_actor="$(GH_TOKEN="$CODEX_TRIGGER_TOKEN" gh api user --jq .login)"
+          if [[ "$trigger_actor" == "github-actions" || "$trigger_actor" == *"[bot]" ]]; then
+            echo "CODEX_TRIGGER_TOKEN must authenticate as a user, not $trigger_actor." >&2
+            exit 1
+          fi
+          prompt="$(cat <<EOF
+          @codex Resolve this existing upstream-sync PR and push the completed
+          result back to its current head branch \`$CANDIDATE_BRANCH\`. Do not
+          create another branch or PR.
+
+          Start from personal \`origin/main\`, rebase the complete personal patch
+          stack onto official upstream commit \`$UPSTREAM_SHA\`, and resolve every
+          conflict. Preserve the current upstream architecture, accessibility,
+          styling, and behavior while retaining all personal-fork features. That
+          includes editable Vim-style picker navigation, model-options access,
+          right-panel shortcuts, the browser-preview shortcut, catalog lazy
+          loading, and keeping picker shortcuts out of the composer bundle.
+
+          Before editing, verify \`GH_TOKEN\` is available without printing it and
+          that \`gh auth status\` succeeds. Run the relevant focused tests,
+          typecheck every affected package, run the full \`vp test\` suite, and
+          confirm there are no conflict markers. Commit the result and push
+          \`HEAD:$CANDIDATE_BRANCH\`. Before finishing, query PR #$pr_number and
+          verify its remote head SHA changed to the commit you pushed. If auth,
+          network access, tests, or the push fails, report the exact command and
+          error instead of claiming the PR was updated. Do not change workflow
+          authentication or unrelated files.
+          EOF
+          )"
+          GH_TOKEN="$CODEX_TRIGGER_TOKEN" gh pr comment "$pr_number" \
+            --repo "$GITHUB_REPOSITORY" \
+            --body "$prompt"
+          echo "Triggered Codex as $trigger_actor on PR #$pr_number."
 
       - name: Resolve release metadata
         if: steps.rebase.outputs.result != 'conflict' && steps.rebase.outputs.result != 'pending'
@@ -278,6 +311,7 @@ jobs:
       - name: Create or update failure PR
         env:
           GH_TOKEN: ${{ github.token }}
+          CODEX_TRIGGER_TOKEN: ${{ secrets.CODEX_TRIGGER_TOKEN }}
           CANDIDATE_BRANCH: ${{ needs.sync.outputs.candidate_branch }}
           MAIN_SHA: ${{ needs.sync.outputs.main_sha }}
           UPSTREAM_SHA: ${{ needs.sync.outputs.upstream_sha }}
@@ -302,10 +336,6 @@ jobs:
           - Build job: \`$BUILD_RESULT\`
           - Promote job: \`$PROMOTE_RESULT\`
 
-          @codex Please inspect the failed checks, fix the underlying issue while
-          preserving both upstream and personal fork functionality, run the
-          relevant tests, and push the fix to this branch. Do not modify workflow
-          authentication or unrelated files.
           EOF
           )"
           existing_pr="$(gh pr list --repo "$GITHUB_REPOSITORY" --state open --base main --head "$CANDIDATE_BRANCH" --json number,url --jq '.[0] | if . then "\(.number)\t\(.url)" else empty end' || true)"
@@ -314,13 +344,46 @@ jobs:
             gh pr comment "$pr_number" --repo "$GITHUB_REPOSITORY" --body "$body"
             echo "Updated existing failure PR $existing_pr."
           else
-            gh pr create \
+            pr_url="$(gh pr create \
               --repo "$GITHUB_REPOSITORY" \
               --base main \
               --head "$CANDIDATE_BRANCH" \
               --title "$title" \
-              --body "$body"
+              --body "$body")"
+            pr_number="${pr_url##*/}"
           fi
+
+          if [[ -z "$CODEX_TRIGGER_TOKEN" ]]; then
+            echo "Missing required Actions secret CODEX_TRIGGER_TOKEN." >&2
+            exit 1
+          fi
+          trigger_actor="$(GH_TOKEN="$CODEX_TRIGGER_TOKEN" gh api user --jq .login)"
+          if [[ "$trigger_actor" == "github-actions" || "$trigger_actor" == *"[bot]" ]]; then
+            echo "CODEX_TRIGGER_TOKEN must authenticate as a user, not $trigger_actor." >&2
+            exit 1
+          fi
+          prompt="$(cat <<EOF
+          @codex Fix the failed checks on this existing upstream-sync PR and push
+          the completed result back to its current head branch
+          \`$CANDIDATE_BRANCH\`. Do not create another branch or PR.
+
+          Inspect the failed GitHub checks and their logs, fix the underlying
+          issue while preserving both current upstream behavior and every
+          personal-fork feature, and avoid unrelated changes. Before editing,
+          verify \`GH_TOKEN\` is available without printing it and that
+          \`gh auth status\` succeeds. Run the relevant focused tests, typecheck
+          every affected package, and run the full \`vp test\` suite. Commit the
+          result and push \`HEAD:$CANDIDATE_BRANCH\`. Before finishing, query the
+          PR and verify its remote head SHA changed to the commit you pushed. If
+          auth, network access, tests, or the push fails, report the exact command
+          and error instead of claiming the PR was updated. Do not change workflow
+          authentication.
+          EOF
+          )"
+          GH_TOKEN="$CODEX_TRIGGER_TOKEN" gh pr comment "$pr_number" \
+            --repo "$GITHUB_REPOSITORY" \
+            --body "$prompt"
+          echo "Triggered Codex as $trigger_actor on PR #$pr_number."
 
   verify:
     name: Verify personal patches
