@@ -83,7 +83,19 @@ jobs:
             --json number,url \
             --jq '.[0] | if . then "\(.number)\t\(.url)" else empty end' || true)"
           if [[ -n "$existing_pr" ]]; then
-            echo "An open sync PR already exists for upstream $upstream_sha: $existing_pr"
+            git fetch origin \
+              "refs/heads/$candidate_branch:refs/remotes/origin/$candidate_branch"
+            existing_candidate="$(git rev-parse "refs/remotes/origin/$candidate_branch")"
+            if [[ "$existing_candidate" != "$upstream_sha" ]] && \
+              git merge-base --is-ancestor "$upstream_sha" "$existing_candidate"; then
+              {
+                echo "result=candidate"
+                echo "candidate_ref=$existing_candidate"
+              } >> "$GITHUB_OUTPUT"
+              echo "Using resolved candidate $existing_candidate from $existing_pr."
+              exit 0
+            fi
+            echo "An unresolved sync PR already exists for upstream $upstream_sha: $existing_pr"
             {
               echo "result=pending"
               echo "candidate_ref=$main_sha"
@@ -293,6 +305,20 @@ jobs:
             # shellcheck disable=SC2016
             git config --local credential.helper '!f() { echo username=x-access-token; echo password="$GITHUB_TOKEN"; }; f'
             git push --force-with-lease="refs/heads/main:$EXPECTED_MAIN_SHA" origin HEAD:main
+            candidate_branch="${{ needs.sync.outputs.candidate_branch }}"
+            existing_pr="$(gh pr list \
+              --repo "$GITHUB_REPOSITORY" \
+              --state open \
+              --base main \
+              --head "$candidate_branch" \
+              --json number \
+              --jq '.[0].number // empty')"
+            if [[ -n "$existing_pr" ]]; then
+              gh pr close "$existing_pr" \
+                --repo "$GITHUB_REPOSITORY" \
+                --comment "Validated and promoted candidate $candidate_sha to personal main."
+            fi
+            git push origin --delete "$candidate_branch"
           else
             echo "Force release requested for the existing personal main commit."
           fi
