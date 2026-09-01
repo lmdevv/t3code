@@ -30,7 +30,7 @@ function stashEntrySnippet(entry: PromptStashEntry): string {
 
 /**
  * Attached banner listing the stashed prompts. Keyboard-first: opened by ⌘S on an
- * empty composer, navigated with arrows, restored with Enter, dismissed
+ * empty composer, navigated with arrows or j/k, restored with Enter, dismissed
  * with Escape. The listener runs capture-phase on window so it wins over
  * the Lexical editor's handlers while the menu is open.
  */
@@ -71,12 +71,17 @@ export const ComposerStashMenu = memo(function ComposerStashMenu(props: {
         onClose();
         return;
       }
-      if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+      const vimNavigationKey =
+        !event.metaKey &&
+        !event.ctrlKey &&
+        !event.altKey &&
+        (event.key === "j" || event.key === "k");
+      if (event.key === "ArrowDown" || event.key === "ArrowUp" || vimNavigationKey) {
         if (entries.length === 0) return;
         event.preventDefault();
         event.stopPropagation();
         const currentIndex = entries.findIndex((entry) => entry.id === highlightedEntry?.id);
-        const offset = event.key === "ArrowDown" ? 1 : -1;
+        const offset = event.key === "ArrowDown" || event.key === "j" ? 1 : -1;
         const normalizedIndex = currentIndex >= 0 ? currentIndex : offset === 1 ? -1 : 0;
         const nextIndex = (normalizedIndex + offset + entries.length) % entries.length;
         setHighlightedId(entries[nextIndex]?.id ?? null);
