@@ -50,6 +50,7 @@ jobs:
         with:
           ref: main
           fetch-depth: 0
+          persist-credentials: false
 
       - id: rebase
         name: Rebase patch stack onto official upstream
@@ -196,11 +197,16 @@ jobs:
       - name: Publish candidate branch
         if: steps.rebase.outputs.publish == 'true'
         env:
-          GITHUB_TOKEN: ${{ secrets.CODEX_TRIGGER_TOKEN || github.token }}
+          PUSH_TOKEN: ${{ secrets.CODEX_TRIGGER_TOKEN }}
           CANDIDATE_BRANCH: ${{ steps.rebase.outputs.candidate_branch }}
         shell: bash
         run: |
           set -euo pipefail
+          if [[ -z "$PUSH_TOKEN" ]]; then
+            echo "Missing required Actions secret CODEX_TRIGGER_TOKEN for workflow-file pushes." >&2
+            exit 1
+          fi
+          git config --local --unset-all http.https://github.com/.extraheader >/dev/null 2>&1 || true
           cleanup_credentials() {
             git config --local --unset credential.helper >/dev/null 2>&1 || true
           }
@@ -208,7 +214,7 @@ jobs:
           # The helper is evaluated by Git later, so this variable must remain
           # literal until the credential helper process runs.
           # shellcheck disable=SC2016
-          git config --local credential.helper '!f() { echo username=x-access-token; echo password="$GITHUB_TOKEN"; }; f'
+          git config --local credential.helper '!f() { echo username=x-access-token; echo password="$PUSH_TOKEN"; }; f'
           git push --force "origin" "HEAD:refs/heads/$CANDIDATE_BRANCH"
 
       - name: Create or update conflict PR
@@ -360,10 +366,12 @@ jobs:
         with:
           ref: ${{ needs.sync.outputs.ref }}
           fetch-depth: 0
+          persist-credentials: false
       - id: promote
         name: Fast-forward personal main to verified candidate
         env:
-          GITHUB_TOKEN: ${{ secrets.CODEX_TRIGGER_TOKEN || github.token }}
+          PUSH_TOKEN: ${{ secrets.CODEX_TRIGGER_TOKEN }}
+          GH_TOKEN: ${{ secrets.CODEX_TRIGGER_TOKEN }}
           EXPECTED_MAIN_SHA: ${{ needs.sync.outputs.main_sha }}
           SHOULD_UPDATE: ${{ needs.sync.outputs.candidate_branch != '' && needs.sync.outputs.candidate_branch != 'main' }}
         shell: bash
@@ -371,6 +379,11 @@ jobs:
           set -euo pipefail
           candidate_sha="$(git rev-parse HEAD)"
           if [[ "$SHOULD_UPDATE" == "true" ]]; then
+            if [[ -z "$PUSH_TOKEN" ]]; then
+              echo "Missing required Actions secret CODEX_TRIGGER_TOKEN for workflow-file pushes." >&2
+              exit 1
+            fi
+            git config --local --unset-all http.https://github.com/.extraheader >/dev/null 2>&1 || true
             cleanup_credentials() {
               git config --local --unset credential.helper >/dev/null 2>&1 || true
             }
@@ -378,7 +391,7 @@ jobs:
             # The helper is evaluated by Git later, so this variable must remain
             # literal until the credential helper process runs.
             # shellcheck disable=SC2016
-            git config --local credential.helper '!f() { echo username=x-access-token; echo password="$GITHUB_TOKEN"; }; f'
+            git config --local credential.helper '!f() { echo username=x-access-token; echo password="$PUSH_TOKEN"; }; f'
             git push --force-with-lease="refs/heads/main:$EXPECTED_MAIN_SHA" origin HEAD:main
             candidate_branch="${{ needs.sync.outputs.candidate_branch }}"
             existing_pr="$(gh pr list \
