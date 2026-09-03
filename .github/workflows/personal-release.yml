@@ -50,7 +50,6 @@ jobs:
         with:
           ref: main
           fetch-depth: 0
-          persist-credentials: false
 
       - id: rebase
         name: Rebase patch stack onto official upstream
@@ -366,7 +365,6 @@ jobs:
         with:
           ref: ${{ needs.sync.outputs.ref }}
           fetch-depth: 0
-          persist-credentials: false
       - id: promote
         name: Fast-forward personal main to verified candidate
         env:
