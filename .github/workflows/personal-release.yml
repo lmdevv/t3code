@@ -205,16 +205,16 @@ jobs:
             echo "Missing required Actions secret CODEX_TRIGGER_TOKEN for workflow-file pushes." >&2
             exit 1
           fi
-          while IFS= read -r line; do
-            [[ -z "$line" ]] && continue
-            git config --local --unset-all "${line%% *}" >/dev/null 2>&1 || true
-            git config --global --unset-all "${line%% *}" >/dev/null 2>&1 || true
-          done < <(git config --get-regexp '^(http\..*\.extraheader|url\..*\.insteadof)$' || true)
-          git remote set-url origin "https://github.com/${GITHUB_REPOSITORY}.git"
           printf 'machine github.com\nlogin x-access-token\npassword %s\n' "$PUSH_TOKEN" > "${HOME}/.netrc"
           chmod 600 "${HOME}/.netrc"
           trap 'rm -f "${HOME}/.netrc"' EXIT
-          git push --force origin "HEAD:refs/heads/$CANDIDATE_BRANCH"
+          clean_repo="$(mktemp -d)"
+          git init --quiet "$clean_repo"
+          git -C "$clean_repo" fetch --quiet "$PWD" HEAD
+          git -C "$clean_repo" checkout --quiet --detach FETCH_HEAD
+          git -C "$clean_repo" remote add origin "https://github.com/${GITHUB_REPOSITORY}.git"
+          GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_SYSTEM=/dev/null \
+            git -C "$clean_repo" push --force origin "HEAD:refs/heads/$CANDIDATE_BRANCH"
 
       - name: Create or update conflict PR
         if: steps.rebase.outputs.result == 'conflict'
@@ -381,16 +381,16 @@ jobs:
               echo "Missing required Actions secret CODEX_TRIGGER_TOKEN for workflow-file pushes." >&2
               exit 1
             fi
-            while IFS= read -r line; do
-              [[ -z "$line" ]] && continue
-              git config --local --unset-all "${line%% *}" >/dev/null 2>&1 || true
-              git config --global --unset-all "${line%% *}" >/dev/null 2>&1 || true
-            done < <(git config --get-regexp '^(http\..*\.extraheader|url\..*\.insteadof)$' || true)
-            git remote set-url origin "https://github.com/${GITHUB_REPOSITORY}.git"
             printf 'machine github.com\nlogin x-access-token\npassword %s\n' "$PUSH_TOKEN" > "${HOME}/.netrc"
             chmod 600 "${HOME}/.netrc"
             trap 'rm -f "${HOME}/.netrc"' EXIT
-            git push --force-with-lease="refs/heads/main:$EXPECTED_MAIN_SHA" origin HEAD:main
+            clean_repo="$(mktemp -d)"
+            git init --quiet "$clean_repo"
+            git -C "$clean_repo" fetch --quiet "$PWD" HEAD
+            git -C "$clean_repo" checkout --quiet --detach FETCH_HEAD
+            git -C "$clean_repo" remote add origin "https://github.com/${GITHUB_REPOSITORY}.git"
+            GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_SYSTEM=/dev/null \
+              git -C "$clean_repo" push --force-with-lease="refs/heads/main:$EXPECTED_MAIN_SHA" origin HEAD:main
             candidate_branch="${{ needs.sync.outputs.candidate_branch }}"
             existing_pr="$(gh pr list \
               --repo "$GITHUB_REPOSITORY" \
