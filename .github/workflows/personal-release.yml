@@ -12,6 +12,8 @@ on:
         required: false
         default: false
         type: boolean
+  pull_request_target:
+    types: [synchronize]
 
 concurrency:
   group: personal-nightly-release
@@ -21,10 +23,17 @@ permissions:
   contents: write
   issues: write
   pull-requests: write
+  workflows: write
 
 jobs:
   sync:
     name: Prepare upstream sync candidate
+    if: >-
+      github.event_name != 'pull_request_target' ||
+      (
+        startsWith(github.head_ref, 'automation/upstream-sync-') &&
+        github.event.pull_request.head.repo.full_name == github.repository
+      )
     runs-on: ubuntu-24.04
     timeout-minutes: 35
     outputs:
@@ -47,6 +56,9 @@ jobs:
         name: Rebase patch stack onto official upstream
         env:
           GH_TOKEN: ${{ github.token }}
+          EVENT_NAME: ${{ github.event_name }}
+          PR_HEAD_REF: ${{ github.head_ref }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         shell: bash
         run: |
           set -euo pipefail
@@ -63,7 +75,28 @@ jobs:
             echo "main_sha=$main_sha"
             echo "upstream_sha=$upstream_sha"
             echo "candidate_branch=$candidate_branch"
+            echo "publish=false"
           } >> "$GITHUB_OUTPUT"
+
+          is_snapshot_sha() {
+            local branch="$1"
+            local sha="$2"
+            local prefix="${branch#automation/upstream-sync-}"
+            [[ "$prefix" != "$branch" && "${sha:0:12}" == "$prefix" ]]
+          }
+
+          use_resolved_candidate() {
+            local branch="$1"
+            local sha="$2"
+            local reason="$3"
+            {
+              echo "result=candidate"
+              echo "candidate_branch=$branch"
+              echo "candidate_ref=$sha"
+              echo "publish=false"
+            } >> "$GITHUB_OUTPUT"
+            echo "$reason"
+          }
 
           if git merge-base --is-ancestor "$upstream_sha" "$main_sha"; then
             {
@@ -72,6 +105,30 @@ jobs:
               echo "candidate_branch=main"
             } >> "$GITHUB_OUTPUT"
             echo "Personal main already contains upstream main at $upstream_sha."
+            exit 0
+          fi
+
+          if [[ "$EVENT_NAME" == "pull_request_target" ]]; then
+            git fetch origin "$PR_HEAD_SHA"
+            if is_snapshot_sha "$PR_HEAD_REF" "$PR_HEAD_SHA"; then
+              {
+                echo "result=pending"
+                echo "candidate_ref=$main_sha"
+              } >> "$GITHUB_OUTPUT"
+              echo "PR head $PR_HEAD_SHA is still the unresolved upstream snapshot."
+              exit 0
+            fi
+            prefix="${PR_HEAD_REF#automation/upstream-sync-}"
+            if git merge-base --is-ancestor "$prefix" "$PR_HEAD_SHA"; then
+              use_resolved_candidate "$PR_HEAD_REF" "$PR_HEAD_SHA" \
+                "Promoting Codex-resolved candidate $PR_HEAD_SHA from $PR_HEAD_REF."
+              exit 0
+            fi
+            {
+              echo "result=pending"
+              echo "candidate_ref=$main_sha"
+            } >> "$GITHUB_OUTPUT"
+            echo "PR head $PR_HEAD_SHA is not a descendant of snapshot $prefix."
             exit 0
           fi
 
@@ -86,13 +143,10 @@ jobs:
             git fetch origin \
               "refs/heads/$candidate_branch:refs/remotes/origin/$candidate_branch"
             existing_candidate="$(git rev-parse "refs/remotes/origin/$candidate_branch")"
-            if [[ "$existing_candidate" != "$upstream_sha" ]] && \
+            if ! is_snapshot_sha "$candidate_branch" "$existing_candidate" && \
               git merge-base --is-ancestor "$upstream_sha" "$existing_candidate"; then
-              {
-                echo "result=candidate"
-                echo "candidate_ref=$existing_candidate"
-              } >> "$GITHUB_OUTPUT"
-              echo "Using resolved candidate $existing_candidate from $existing_pr."
+              use_resolved_candidate "$candidate_branch" "$existing_candidate" \
+                "Using resolved candidate $existing_candidate from $existing_pr."
               exit 0
             fi
             echo "An unresolved sync PR already exists for upstream $upstream_sha: $existing_pr"
@@ -114,6 +168,7 @@ jobs:
             {
               echo "result=candidate"
               echo "candidate_ref=$candidate_sha"
+              echo "publish=true"
             } >> "$GITHUB_OUTPUT"
             echo "Prepared candidate $candidate_sha on $candidate_branch."
             exit 0
@@ -125,6 +180,7 @@ jobs:
             {
               echo "result=conflict"
               echo "candidate_ref=$upstream_sha"
+              echo "publish=true"
               echo "conflict_files<<$delimiter"
               printf '%s\n' "$conflict_files"
               echo "$delimiter"
@@ -139,9 +195,9 @@ jobs:
           exit "$rebase_status"
 
       - name: Publish candidate branch
-        if: steps.rebase.outputs.result == 'candidate' || steps.rebase.outputs.result == 'conflict'
+        if: steps.rebase.outputs.publish == 'true'
         env:
-          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_TOKEN: ${{ secrets.CODEX_TRIGGER_TOKEN || github.token }}
           CANDIDATE_BRANCH: ${{ steps.rebase.outputs.candidate_branch }}
         shell: bash
         run: |
@@ -215,7 +271,8 @@ jobs:
           prompt="$(cat <<EOF
           @codex Resolve this existing upstream-sync PR and push the completed
           result back to its current head branch \`$CANDIDATE_BRANCH\`. Do not
-          create another branch or PR.
+          create another branch or PR, and do not wait to merge it. GitHub
+          Actions will promote the branch to personal main after you push.
 
           Start from personal \`origin/main\`, rebase the complete personal patch
           stack onto official upstream commit \`$UPSTREAM_SHA\`, and resolve every
@@ -226,19 +283,38 @@ jobs:
           loading, and keeping picker shortcuts out of the composer bundle.
 
           Before editing, verify \`GH_TOKEN\` is available without printing it and
-          that \`gh auth status\` succeeds. Run the relevant focused tests,
-          typecheck every affected package, run the full \`vp test\` suite, and
-          confirm there are no conflict markers. Commit the result and push
-          \`HEAD:$CANDIDATE_BRANCH\`. Before finishing, query PR #$pr_number and
-          verify its remote head SHA changed to the commit you pushed. If auth,
-          network access, tests, or the push fails, report the exact command and
-          error instead of claiming the PR was updated. Do not change workflow
-          authentication or unrelated files.
+          that \`gh auth status\` succeeds. Typecheck every affected package and
+          confirm there are no conflict markers. Run focused tests for the files
+          you changed. Do not block the push on full \`vp test\` failures that
+          come from Codex Cloud running as root (permission tests that expect
+          chmod to make files unwritable). Commit the result and push with:
+          \`git -c credential.helper='!gh auth git-credential' push --force-with-lease origin HEAD:$CANDIDATE_BRANCH\`.
+          Before finishing, query PR #$pr_number and verify its remote head SHA
+          changed to the commit you pushed. If auth, network access, or the push
+          fails, report the exact command and error instead of claiming the PR
+          was updated. Do not change workflow authentication or unrelated files.
           EOF
           )"
           GH_TOKEN="$CODEX_TRIGGER_TOKEN" gh pr comment "$pr_number" \
             --repo "$GITHUB_REPOSITORY" \
             --body "$prompt"
+          stale_prs="$(gh pr list \
+            --repo "$GITHUB_REPOSITORY" \
+            --state open \
+            --base main \
+            --json number,headRefName \
+            | jq -r --arg keep "$pr_number" \
+              '.[] | select(.headRefName | startswith("automation/upstream-sync-")) | select((.number|tostring) != $keep) | .number' \
+            || true)"
+          if [[ -n "$stale_prs" ]]; then
+            while read -r stale; do
+              [[ -z "$stale" ]] && continue
+              gh pr close "$stale" \
+                --repo "$GITHUB_REPOSITORY" \
+                --comment "Superseded by PR #$pr_number, which targets newer upstream $UPSTREAM_SHA." \
+                || true
+            done <<<"$stale_prs"
+          fi
           echo "Triggered Codex as $trigger_actor on PR #$pr_number."
 
       - name: Resolve release metadata
@@ -288,7 +364,7 @@ jobs:
       - id: promote
         name: Fast-forward personal main to verified candidate
         env:
-          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_TOKEN: ${{ secrets.CODEX_TRIGGER_TOKEN || github.token }}
           EXPECTED_MAIN_SHA: ${{ needs.sync.outputs.main_sha }}
           SHOULD_UPDATE: ${{ needs.sync.outputs.candidate_branch != '' && needs.sync.outputs.candidate_branch != 'main' }}
         shell: bash
@@ -391,19 +467,22 @@ jobs:
           prompt="$(cat <<EOF
           @codex Fix the failed checks on this existing upstream-sync PR and push
           the completed result back to its current head branch
-          \`$CANDIDATE_BRANCH\`. Do not create another branch or PR.
+          \`$CANDIDATE_BRANCH\`. Do not create another branch or PR, and do not
+          wait to merge it. GitHub Actions will promote the branch after you push.
 
           Inspect the failed GitHub checks and their logs, fix the underlying
           issue while preserving both current upstream behavior and every
           personal-fork feature, and avoid unrelated changes. Before editing,
           verify \`GH_TOKEN\` is available without printing it and that
-          \`gh auth status\` succeeds. Run the relevant focused tests, typecheck
-          every affected package, and run the full \`vp test\` suite. Commit the
-          result and push \`HEAD:$CANDIDATE_BRANCH\`. Before finishing, query the
-          PR and verify its remote head SHA changed to the commit you pushed. If
-          auth, network access, tests, or the push fails, report the exact command
-          and error instead of claiming the PR was updated. Do not change workflow
-          authentication.
+          \`gh auth status\` succeeds. Typecheck every affected package and run
+          focused tests for the files you changed. Do not block the push on full
+          \`vp test\` failures that come from Codex Cloud running as root.
+          Commit the result and push with:
+          \`git -c credential.helper='!gh auth git-credential' push --force-with-lease origin HEAD:$CANDIDATE_BRANCH\`.
+          Before finishing, query the PR and verify its remote head SHA changed
+          to the commit you pushed. If auth, network access, or the push fails,
+          report the exact command and error instead of claiming the PR was
+          updated. Do not change workflow authentication.
           EOF
           )"
           GH_TOKEN="$CODEX_TRIGGER_TOKEN" gh pr comment "$pr_number" \
