@@ -205,8 +205,11 @@ jobs:
             echo "Missing required Actions secret CODEX_TRIGGER_TOKEN for workflow-file pushes." >&2
             exit 1
           fi
-          git config --local --unset-all http.https://github.com/.extraheader >/dev/null 2>&1 || true
-          git config --local --unset-all http.extraheader >/dev/null 2>&1 || true
+          while IFS= read -r line; do
+            [[ -z "$line" ]] && continue
+            git config --local --unset-all "${line%% *}" >/dev/null 2>&1 || true
+            git config --global --unset-all "${line%% *}" >/dev/null 2>&1 || true
+          done < <(git config --get-regexp '^http\..*\.extraheader$' || true)
           git remote set-url origin "https://github.com/${GITHUB_REPOSITORY}.git"
           git -c "http.https://github.com/.extraheader=Authorization: Bearer ${PUSH_TOKEN}" \
             push --force origin "HEAD:refs/heads/$CANDIDATE_BRANCH"
@@ -376,8 +379,11 @@ jobs:
               echo "Missing required Actions secret CODEX_TRIGGER_TOKEN for workflow-file pushes." >&2
               exit 1
             fi
-            git config --local --unset-all http.https://github.com/.extraheader >/dev/null 2>&1 || true
-            git config --local --unset-all http.extraheader >/dev/null 2>&1 || true
+            while IFS= read -r line; do
+              [[ -z "$line" ]] && continue
+              git config --local --unset-all "${line%% *}" >/dev/null 2>&1 || true
+              git config --global --unset-all "${line%% *}" >/dev/null 2>&1 || true
+            done < <(git config --get-regexp '^http\..*\.extraheader$' || true)
             git remote set-url origin "https://github.com/${GITHUB_REPOSITORY}.git"
             git -c "http.https://github.com/.extraheader=Authorization: Bearer ${PUSH_TOKEN}" \
               push --force-with-lease="refs/heads/main:$EXPECTED_MAIN_SHA" origin HEAD:main
