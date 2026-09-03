@@ -209,10 +209,12 @@ jobs:
             [[ -z "$line" ]] && continue
             git config --local --unset-all "${line%% *}" >/dev/null 2>&1 || true
             git config --global --unset-all "${line%% *}" >/dev/null 2>&1 || true
-          done < <(git config --get-regexp '^http\..*\.extraheader$' || true)
+          done < <(git config --get-regexp '^(http\..*\.extraheader|url\..*\.insteadof)$' || true)
           git remote set-url origin "https://github.com/${GITHUB_REPOSITORY}.git"
-          git -c "http.https://github.com/.extraheader=Authorization: Bearer ${PUSH_TOKEN}" \
-            push --force origin "HEAD:refs/heads/$CANDIDATE_BRANCH"
+          printf 'machine github.com\nlogin x-access-token\npassword %s\n' "$PUSH_TOKEN" > "${HOME}/.netrc"
+          chmod 600 "${HOME}/.netrc"
+          trap 'rm -f "${HOME}/.netrc"' EXIT
+          git push --force origin "HEAD:refs/heads/$CANDIDATE_BRANCH"
 
       - name: Create or update conflict PR
         if: steps.rebase.outputs.result == 'conflict'
@@ -383,10 +385,12 @@ jobs:
               [[ -z "$line" ]] && continue
               git config --local --unset-all "${line%% *}" >/dev/null 2>&1 || true
               git config --global --unset-all "${line%% *}" >/dev/null 2>&1 || true
-            done < <(git config --get-regexp '^http\..*\.extraheader$' || true)
+            done < <(git config --get-regexp '^(http\..*\.extraheader|url\..*\.insteadof)$' || true)
             git remote set-url origin "https://github.com/${GITHUB_REPOSITORY}.git"
-            git -c "http.https://github.com/.extraheader=Authorization: Bearer ${PUSH_TOKEN}" \
-              push --force-with-lease="refs/heads/main:$EXPECTED_MAIN_SHA" origin HEAD:main
+            printf 'machine github.com\nlogin x-access-token\npassword %s\n' "$PUSH_TOKEN" > "${HOME}/.netrc"
+            chmod 600 "${HOME}/.netrc"
+            trap 'rm -f "${HOME}/.netrc"' EXIT
+            git push --force-with-lease="refs/heads/main:$EXPECTED_MAIN_SHA" origin HEAD:main
             candidate_branch="${{ needs.sync.outputs.candidate_branch }}"
             existing_pr="$(gh pr list \
               --repo "$GITHUB_REPOSITORY" \
