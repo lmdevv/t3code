@@ -319,17 +319,31 @@ jobs:
             candidate_branch="${{ needs.sync.outputs.candidate_branch }}"
             existing_pr="$(gh pr list \
               --repo "$GITHUB_REPOSITORY" \
-              --state open \
+              --state all \
               --base main \
               --head "$candidate_branch" \
               --json number \
               --jq '.[0].number // empty')"
             if [[ -n "$existing_pr" ]]; then
-              gh pr close "$existing_pr" \
-                --repo "$GITHUB_REPOSITORY" \
-                --comment "Validated and promoted candidate $candidate_sha to personal main."
+              pr_state="$(gh pr view "$existing_pr" --repo "$GITHUB_REPOSITORY" --json state --jq .state)"
+              if [[ "$pr_state" == "OPEN" ]]; then
+                if ! gh pr close "$existing_pr" \
+                  --repo "$GITHUB_REPOSITORY" \
+                  --comment "Validated and promoted candidate $candidate_sha to personal main."; then
+                  pr_state="$(gh pr view "$existing_pr" --repo "$GITHUB_REPOSITORY" --json state --jq .state)"
+                  [[ "$pr_state" == "MERGED" ]]
+                fi
+              elif [[ "$pr_state" == "MERGED" ]]; then
+                gh pr comment "$existing_pr" \
+                  --repo "$GITHUB_REPOSITORY" \
+                  --body "Validated and promoted candidate $candidate_sha to personal main."
+              fi
             fi
-            git push origin --delete "$candidate_branch"
+            if git ls-remote --exit-code --heads origin "refs/heads/$candidate_branch" >/dev/null; then
+              if ! git push origin --delete "$candidate_branch"; then
+                ! git ls-remote --exit-code --heads origin "refs/heads/$candidate_branch" >/dev/null
+              fi
+            fi
           else
             echo "Force release requested for the existing personal main commit."
           fi
