@@ -1,10 +1,6 @@
 name: Personal upstream sync and release
 
 on:
-  schedule:
-    # GitHub cron schedules use UTC. Run five times daily without using minute
-    # zero, which GitHub can delay.
-    - cron: "17 0,4,8,12,16 * * *"
   workflow_dispatch:
     inputs:
       force:
