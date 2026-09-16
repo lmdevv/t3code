@@ -1334,7 +1334,8 @@ describe("composer and pull request shortcuts", () => {
       (key, command) => {
         const input = event({
           key,
-          shiftKey: true,
+          shiftKey: command !== "composer.mode",
+          altKey: command === "composer.mode",
           metaKey: platform === "MacIntel",
           ctrlKey: platform !== "MacIntel",
         });
