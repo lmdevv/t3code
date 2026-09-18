@@ -62,6 +62,7 @@ describe("shouldBundleCliDependency", () => {
   // below ensures it follows that root into the sidecar.
   it("treats prefix-matched siblings as external", () => {
     assert.strictEqual(shouldBundleCliDependency("node-gyp-build-optional-packages"), false);
+    assert.strictEqual(shouldBundleCliDependency("detect-libc"), false);
   });
 });
 
