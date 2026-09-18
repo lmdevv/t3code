@@ -36,6 +36,9 @@ export const CLI_RUNTIME_EXTERNAL_PREFIXES = [
   "@clerk/electron-passkeys",
   "node-gyp-build",
   "node-addon-api",
+  // node-gyp-build-optional-packages requires this at runtime. Leaving it
+  // bundled made WSL fail to resolve the native loader's helper.
+  "detect-libc",
   // ws's optional accelerators. Nothing in this repo declares them, so they are
   // not in the staged production install and the packaged app does not ship
   // them either way -- ws wraps the require in try/catch and falls back to its
@@ -122,7 +125,7 @@ export function findEsmImportsOfExternalPackages(source: string): ReadonlyArray<
  * `alwaysBundle` predicate only forces packages IN; returning false from it
  * means "no opinion", so a transitive dependency still gets bundled by default.
  * A native loader and its helper (node-gyp-build-optional-packages and
- * detect-libc, when msgpackr-extract was still a dependency) were inlined that
+ * detect-libc) were inlined that
  * way while every list-based test passed, which is why this reads the artifact
  * instead.
  *
