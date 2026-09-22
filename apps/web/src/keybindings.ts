@@ -150,6 +150,7 @@ function resolveContext(options: ShortcutMatchOptions | undefined): ShortcutMatc
     terminalOpen: false,
     previewFocus: false,
     previewOpen: false,
+    isMac: isMacPlatform(resolvePlatform(options)),
     isWeb: !isElectron,
     isDesktop: isElectron,
     editableFocus: false,

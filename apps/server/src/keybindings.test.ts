@@ -203,8 +203,8 @@ it.layer(NodeServices.layer)("keybindings", (it) => {
       assert.equal(defaultsByCommand.get("thread.jump.9"), "mod+9");
       assert.equal(defaultsByCommand.get("modelPicker.toggle"), "mod+shift+m");
       assert.equal(defaultsByCommand.get("modelOptionsPicker.toggle"), "mod+shift+,");
-      assert.equal(defaultsByCommand.get("picker.previous"), "ctrl+p");
-      assert.equal(defaultsByCommand.get("picker.next"), "ctrl+n");
+      assert.equal(defaultsByCommand.get("picker.previous"), "ctrl+k");
+      assert.equal(defaultsByCommand.get("picker.next"), "ctrl+j");
       assert.equal(defaultsByCommand.get("themeEditor.toggle"), "mod+alt+shift+t");
       assert.equal(defaultsByCommand.get("filePicker.toggle"), "mod+p");
       assert.equal(defaultsByCommand.get("projectSearch.toggle"), "mod+alt+f");
@@ -347,6 +347,47 @@ it.layer(NodeServices.layer)("keybindings", (it) => {
         assert.equal(byCommand.get("rightPanel.openTerminal")?.when, undefined);
         assert.equal(byCommand.get("rightPanel.openFiles")?.key, "mod+shift+f");
       }).pipe(Effect.provide(makeKeybindingsLayer())),
+  );
+
+  it.effect("migrates saved picker defaults to Ctrl+J/K with macOS aliases only once", () =>
+    Effect.gen(function* () {
+      const { keybindingsConfigPath } = yield* ServerConfig.ServerConfig;
+      yield* writeKeybindingsConfig(keybindingsConfigPath, [
+        { key: "ctrl+p", command: "picker.previous", when: "pickerOpen" },
+        { key: "ctrl+n", command: "picker.next", when: "pickerOpen" },
+      ]);
+      const keybindings = yield* Keybindings.Keybindings;
+      yield* keybindings.syncDefaultKeybindingsOnStartup;
+      const persisted = yield* readKeybindingsConfig(keybindingsConfigPath);
+      assert.deepEqual(
+        persisted.filter((rule) => rule.command.startsWith("picker.")),
+        [
+          { key: "ctrl+p", command: "picker.previous", when: "pickerOpen && isMac" },
+          { key: "ctrl+k", command: "picker.previous", when: "pickerOpen" },
+          { key: "ctrl+n", command: "picker.next", when: "pickerOpen && isMac" },
+          { key: "ctrl+j", command: "picker.next", when: "pickerOpen" },
+        ],
+      );
+      yield* keybindings.syncDefaultKeybindingsOnStartup;
+      assert.deepEqual(yield* readKeybindingsConfig(keybindingsConfigPath), persisted);
+    }).pipe(Effect.provide(makeKeybindingsLayer())),
+  );
+
+  it.effect("preserves customized picker rules and occupied migration destinations", () =>
+    Effect.gen(function* () {
+      const { keybindingsConfigPath } = yield* ServerConfig.ServerConfig;
+      const original = [
+        { key: "alt+p", command: "picker.previous", when: "pickerOpen" },
+        { key: "ctrl+n", command: "picker.next", when: "pickerOpen" },
+        { key: "ctrl+j", command: "script.custom.run", when: "pickerOpen" },
+      ] as const;
+      yield* writeKeybindingsConfig(keybindingsConfigPath, [...original]);
+      const keybindings = yield* Keybindings.Keybindings;
+      yield* keybindings.syncDefaultKeybindingsOnStartup;
+      const persisted = yield* readKeybindingsConfig(keybindingsConfigPath);
+      assert.deepEqual(persisted.slice(0, original.length), [...original]);
+      assert.equal(persisted.filter((rule) => rule.command.startsWith("picker.")).length, 2);
+    }).pipe(Effect.provide(makeKeybindingsLayer())),
   );
 
   it.effect("drops the terminal-focus guard from the default right-panel terminal shortcut", () =>

@@ -84,10 +84,10 @@ Join modifiers and a key with `+`, such as `mod+shift+d` or `ctrl+l`.
 ## When conditions
 
 Available context keys are `terminalFocus`, `terminalOpen`, `previewFocus`,
-`previewOpen`, `modelPickerOpen`, `pickerOpen`, `editableFocus`, `isWeb`, and `isDesktop`.
+`previewOpen`, `modelPickerOpen`, `pickerOpen`, `editableFocus`, `isMac`, `isWeb`, and `isDesktop`.
 `editableFocus` is true while a text field, the composer, or another editor has
 the keyboard. `isWeb` is true in a browser tab. `isDesktop` is true in the
-desktop app. Unknown keys evaluate to `false`.
+desktop app. `isMac` describes the client platform, including remote connections. Unknown keys evaluate to `false`.
 
 `mod+1` through `mod+9` jump to the first nine threads, and to models while the
 model picker is open. Those defaults use `isDesktop` so they do not steal the
@@ -106,7 +106,8 @@ Combine keys with `!` for not, `&&` for and, `||` for or, and parentheses:
 `projectSearch.toggle` searches inside the active project's files and defaults to `mod+alt+f`.
 Repeating either shortcut closes that search, and switching shortcuts replaces the open search.
 
-Picker lists support `picker.previous` and `picker.next`, which default to `ctrl+p` and `ctrl+n`.
+Picker lists support `picker.previous` and `picker.next`, which default to `ctrl+k` and `ctrl+j`.
+On macOS, `ctrl+p` and `ctrl+n` are also available.
 These commands are active only while a supported picker is open. They cover the command palette,
 file and project search, model and model-options pickers, composer file/skill/slash suggestions,
 the prompt stash drawer, and the right-panel launcher.

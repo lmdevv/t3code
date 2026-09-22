@@ -906,28 +906,71 @@ describe("resolveShortcutCommand", () => {
     );
   });
 
-  it("scopes Ctrl+N/P picker navigation without shadowing Linux mod shortcuts", () => {
-    assert.strictEqual(
-      resolveShortcutCommand(event({ key: "p", ctrlKey: true }), DEFAULT_BINDINGS, {
-        platform: "Linux",
-        context: { pickerOpen: true, terminalFocus: false },
-      }),
-      "picker.previous",
-    );
-    assert.strictEqual(
-      resolveShortcutCommand(event({ key: "n", ctrlKey: true }), DEFAULT_BINDINGS, {
-        platform: "Linux",
-        context: { pickerOpen: true, terminalFocus: false },
-      }),
-      "picker.next",
-    );
-    assert.strictEqual(
-      resolveShortcutCommand(event({ key: "p", ctrlKey: true }), DEFAULT_BINDINGS, {
-        platform: "Linux",
-        context: { pickerOpen: false, terminalFocus: false },
-      }),
-      "filePicker.toggle",
-    );
+  for (const platform of ["Linux", "MacIntel", "Win32"] as const) {
+    it(`navigates open pickers with Ctrl+J/K on ${platform}`, () => {
+      for (const [key, command] of [
+        ["j", "picker.next"],
+        ["k", "picker.previous"],
+      ] as const) {
+        assert.strictEqual(
+          resolveShortcutCommand(event({ key, ctrlKey: true }), DEFAULT_RESOLVED_KEYBINDINGS, {
+            platform,
+            context: { pickerOpen: true },
+          }),
+          command,
+        );
+      }
+    });
+  }
+
+  it("preserves Linux shortcuts outside pickers and leaves Ctrl+N/P available inside them", () => {
+    for (const [key, command] of [
+      ["j", "terminal.toggle"],
+      ["k", "commandPalette.toggle"],
+      ["n", "chat.new"],
+      ["p", "filePicker.toggle"],
+    ] as const) {
+      assert.strictEqual(
+        resolveShortcutCommand(event({ key, ctrlKey: true }), DEFAULT_RESOLVED_KEYBINDINGS, {
+          platform: "Linux",
+          context: { pickerOpen: false },
+        }),
+        command,
+      );
+    }
+    for (const [key, command] of [
+      ["n", "chat.new"],
+      ["p", "filePicker.toggle"],
+    ] as const) {
+      assert.strictEqual(
+        resolveShortcutCommand(event({ key, ctrlKey: true }), DEFAULT_RESOLVED_KEYBINDINGS, {
+          platform: "Linux",
+          context: { pickerOpen: true },
+        }),
+        command,
+      );
+    }
+  });
+
+  it("also navigates macOS pickers with Ctrl+N/P", () => {
+    for (const [key, command] of [
+      ["n", "picker.next"],
+      ["p", "picker.previous"],
+    ] as const) {
+      assert.strictEqual(
+        resolveShortcutCommand(event({ key, ctrlKey: true }), DEFAULT_RESOLVED_KEYBINDINGS, {
+          platform: "MacIntel",
+          context: { pickerOpen: true },
+        }),
+        command,
+      );
+      assert.isNull(
+        resolveShortcutCommand(event({ key, ctrlKey: true }), DEFAULT_RESOLVED_KEYBINDINGS, {
+          platform: "MacIntel",
+          context: { pickerOpen: false },
+        }),
+      );
+    }
   });
 
   it("resolves the right-panel terminal shortcut while the terminal is focused", () => {
