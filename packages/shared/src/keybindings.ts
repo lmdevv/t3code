@@ -78,8 +78,10 @@ export const DEFAULT_KEYBINDINGS: ReadonlyArray<KeybindingRule> = [
     command,
     when: "modelPickerOpen && isDesktop",
   })),
-  { key: "ctrl+p", command: "picker.previous", when: "pickerOpen" },
-  { key: "ctrl+n", command: "picker.next", when: "pickerOpen" },
+  { key: "ctrl+p", command: "picker.previous", when: "pickerOpen && isMac" },
+  { key: "ctrl+n", command: "picker.next", when: "pickerOpen && isMac" },
+  { key: "ctrl+k", command: "picker.previous", when: "pickerOpen" },
+  { key: "ctrl+j", command: "picker.next", when: "pickerOpen" },
 ];
 
 function normalizeKeyToken(token: string): string {

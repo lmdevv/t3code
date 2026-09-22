@@ -121,11 +121,25 @@ function hasSameShortcutContext(left: KeybindingRule, right: KeybindingRule): bo
 
 const LEGACY_DEFAULT_KEYBINDING_MIGRATIONS: ReadonlyArray<{
   readonly from: KeybindingRule;
-  readonly to: KeybindingRule;
+  readonly to: readonly KeybindingRule[];
 }> = [
   {
+    from: { key: "ctrl+p", command: "picker.previous", when: "pickerOpen" },
+    to: [
+      { key: "ctrl+p", command: "picker.previous", when: "pickerOpen && isMac" },
+      { key: "ctrl+k", command: "picker.previous", when: "pickerOpen" },
+    ],
+  },
+  {
+    from: { key: "ctrl+n", command: "picker.next", when: "pickerOpen" },
+    to: [
+      { key: "ctrl+n", command: "picker.next", when: "pickerOpen && isMac" },
+      { key: "ctrl+j", command: "picker.next", when: "pickerOpen" },
+    ],
+  },
+  {
     from: { key: "mod+shift+j", command: "preview.toggle" },
-    to: { key: "mod+shift+b", command: "preview.toggle" },
+    to: [{ key: "mod+shift+b", command: "preview.toggle" }],
   },
   {
     from: {
@@ -133,7 +147,7 @@ const LEGACY_DEFAULT_KEYBINDING_MIGRATIONS: ReadonlyArray<{
       command: "projectSearch.toggle",
       when: "!terminalFocus",
     },
-    to: { key: "mod+alt+f", command: "projectSearch.toggle", when: "!terminalFocus" },
+    to: [{ key: "mod+alt+f", command: "projectSearch.toggle", when: "!terminalFocus" }],
   },
   {
     from: {
@@ -141,7 +155,7 @@ const LEGACY_DEFAULT_KEYBINDING_MIGRATIONS: ReadonlyArray<{
       command: "rightPanel.openTerminal",
       when: "!terminalFocus",
     },
-    to: { key: "mod+shift+j", command: "rightPanel.openTerminal" },
+    to: [{ key: "mod+shift+j", command: "rightPanel.openTerminal" }],
   },
 ];
 
@@ -158,11 +172,13 @@ function migrateLegacyDefaultKeybindings(config: readonly KeybindingRule[]): {
     );
     if (sourceIndex === -1) continue;
     const destinationClaimed = keybindings.some(
-      (entry, index) => index !== sourceIndex && hasSameShortcutContext(entry, migration.to),
+      (entry, index) =>
+        index !== sourceIndex && migration.to.some((rule) => hasSameShortcutContext(entry, rule)),
     );
-    if (destinationClaimed) continue;
-    keybindings[sourceIndex] = migration.to;
-    migratedCommands.push(migration.to.command);
+    if (destinationClaimed || keybindings.length - 1 + migration.to.length > MAX_KEYBINDINGS_COUNT)
+      continue;
+    keybindings.splice(sourceIndex, 1, ...migration.to);
+    migratedCommands.push(migration.from.command);
   }
 
   return { keybindings, migratedCommands };
